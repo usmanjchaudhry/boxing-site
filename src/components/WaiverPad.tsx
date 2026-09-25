@@ -100,9 +100,9 @@ export default function WaiverPad({
       <div className="bg-zinc-950 border border-white/10 rounded-3xl w-full max-w-3xl overflow-hidden shadow-2xl flex flex-col max-h-full">
         
         {/* Header */}
-        <div className="p-6 border-b border-white/10 bg-black/50">
-          <h2 className="text-2xl font-black text-white">Release of Liability Waiver</h2>
-          <p className="text-red-500 font-bold text-sm mt-1 uppercase tracking-wider">
+        <div className="p-4 sm:p-6 border-b border-white/10 bg-black/50">
+          <h2 className="text-xl sm:text-2xl font-black text-white">Release of Liability Waiver</h2>
+          <p className="text-red-500 font-bold text-xs sm:text-sm mt-1 uppercase tracking-wider">
             Required Signature for: {participantName}
           </p>
         </div>
@@ -113,9 +113,9 @@ export default function WaiverPad({
         </div>
 
         {/* Signature Area */}
-        <div className="p-6 border-t border-white/10 bg-zinc-900 flex-shrink-0">
+        <div className="p-4 sm:p-6 border-t border-white/10 bg-zinc-900 flex-shrink-0">
           <div className="flex justify-between items-end mb-2">
-            <label className="text-sm font-semibold text-white">Draw Signature Below</label>
+            <label className="text-xs sm:text-sm font-semibold text-white">Draw Signature Below</label>
             <button 
               onClick={clearPad}
               className="text-xs font-semibold text-zinc-400 hover:text-white transition-colors"
@@ -129,7 +129,7 @@ export default function WaiverPad({
               ref={canvasRef}
               width={700}
               height={200}
-              className="w-full cursor-crosshair h-[200px]"
+              className="w-full cursor-crosshair h-[150px] sm:h-[200px]"
               onMouseDown={startDrawing}
               onMouseMove={draw}
               onMouseUp={stopDrawing}
@@ -140,11 +140,11 @@ export default function WaiverPad({
             />
           </div>
 
-          <div className="mt-6 flex justify-end">
+          <div className="mt-4 sm:mt-6 flex justify-end">
             <button
               onClick={handleSubmit}
               disabled={!hasSigned || isSubmitting}
-              className={`px-8 py-3 rounded-xl font-bold text-sm transition-all ${
+              className={`w-full sm:w-auto px-8 py-3 rounded-xl font-bold text-sm transition-all ${
                 hasSigned && !isSubmitting
                 ? 'bg-red-600 text-white hover:bg-red-700 active:scale-95 shadow-[0_0_20px_-5px_rgba(220,38,38,0.5)]' 
                 : 'bg-zinc-800 text-zinc-500 cursor-not-allowed'

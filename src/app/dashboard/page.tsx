@@ -52,13 +52,24 @@ export default async function DashboardPage() {
   if (householdId) {
     const { data: sub } = await supabase
       .from('subscriptions')
-      .select('status, end_date, plan_id, membership_plans(name)')
+      .select('status, end_date, plan_id, payment_method, membership_plans(name)')
       .eq('household_id', householdId)
       .limit(1)
       .maybeSingle()
 
     if (sub) {
-      subscription = sub
+      // Auto-expire cash subscriptions past their end_date
+      if (sub.status === 'Active' && sub.end_date && new Date(sub.end_date) < new Date()) {
+        await supabase
+          .from('subscriptions')
+          .update({ status: 'Cancelled' })
+          .eq('household_id', householdId)
+          .eq('status', 'Active')
+        
+        subscription = { ...sub, status: 'Cancelled' }
+      } else {
+        subscription = sub
+      }
       planName = (sub.membership_plans as any)?.name || null
     }
   }
@@ -131,21 +142,29 @@ export default async function DashboardPage() {
 
       <Navbar />
 
-      <main className={`max-w-7xl mx-auto px-6 py-12 ${missingWaiverFor ? 'blur-md pointer-events-none' : ''}`}>
-        <div className="mb-12">
-          <h1 className="text-3xl font-bold mb-2">Welcome back, {profile?.first_name || 'Champion'}.</h1>
-          <p className="text-zinc-400">Manage your membership, book classes, and track your progress.</p>
+      <main className={`max-w-7xl mx-auto px-4 sm:px-6 py-8 sm:py-12 ${missingWaiverFor ? 'blur-md pointer-events-none' : ''}`}>
+        <div className="mb-8 sm:mb-12">
+          <h1 className="text-2xl sm:text-3xl font-bold mb-2">Welcome back, {profile?.first_name || 'Champion'}.</h1>
+          <p className="text-zinc-400 text-sm sm:text-base">Manage your membership, book classes, and track your progress.</p>
         </div>
 
-        <div className="grid md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
           
           {/* Membership Status Card */}
           <div className="p-6 rounded-3xl bg-zinc-950 border border-white/5 flex flex-col justify-between">
             <div>
               <h3 className="text-lg font-semibold mb-4 text-zinc-300">Membership Status</h3>
               <div className="flex items-end gap-3 mb-2">
-                <span className={`text-3xl font-black ${isActive ? 'text-green-400' : 'text-white'}`}>
-                  {isActive ? 'Active' : 'Inactive'}
+                <span className={`text-3xl font-black ${
+                  isActive ? 'text-green-400' 
+                  : subscription?.status === 'Past_Due' ? 'text-amber-400'
+                  : subscription?.status === 'Cancelled' ? 'text-red-400'
+                  : 'text-white'
+                }`}>
+                  {isActive ? 'Active' 
+                   : subscription?.status === 'Past_Due' ? 'Past Due'
+                   : subscription?.status === 'Cancelled' ? 'Cancelled'
+                   : 'Inactive'}
                 </span>
               </div>
               {isActive && planName && (
@@ -156,8 +175,18 @@ export default async function DashboardPage() {
                   Renews: {new Date(subscription.end_date).toLocaleDateString()}
                 </p>
               )}
-              {!isActive && (
-                <p className="text-sm text-zinc-500 mt-2">You do not have an active subscription.</p>
+              {subscription?.status === 'Past_Due' && (
+                <div className="mt-2 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
+                  <p className="text-xs text-amber-400 font-medium">⚠ Your last payment failed. Please update your payment method to restore access.</p>
+                </div>
+              )}
+              {subscription?.status === 'Cancelled' && (
+                <div className="mt-2 p-3 rounded-xl bg-red-500/10 border border-red-500/20">
+                  <p className="text-xs text-red-400 font-medium">Your subscription has been cancelled. Re-subscribe to regain gym access.</p>
+                </div>
+              )}
+              {!subscription && (
+                <p className="text-sm text-zinc-500 mt-2">You do not have a subscription yet.</p>
               )}
             </div>
             <Link 
@@ -168,7 +197,10 @@ export default async function DashboardPage() {
                   : 'bg-red-600 hover:bg-red-700 text-white shadow-[0_0_15px_-5px_rgba(220,38,38,0.5)]'
               }`}
             >
-              {isActive ? 'Manage Plan' : 'View Memberships'}
+              {isActive ? 'Manage Plan' 
+               : subscription?.status === 'Past_Due' ? 'Update Payment'
+               : subscription?.status === 'Cancelled' ? 'Re-subscribe'
+               : 'View Memberships'}
             </Link>
           </div>
 
@@ -178,9 +210,9 @@ export default async function DashboardPage() {
             <div className="relative z-10">
               <p className="text-zinc-500 text-sm italic">No upcoming classes booked.</p>
             </div>
-            <button className="mt-6 w-full bg-white/10 hover:bg-white/20 text-white text-sm font-semibold py-3 rounded-xl transition-colors border border-white/5 active:scale-95">
+            <Link href="/schedule" className="mt-6 w-full bg-white/10 hover:bg-white/20 text-white text-sm font-semibold py-3 rounded-xl transition-colors border border-white/5 active:scale-95 block text-center">
               View Schedule
-            </button>
+            </Link>
           </div>
 
           {/* Household Management */}
@@ -216,10 +248,10 @@ export default async function DashboardPage() {
           </div>
 
           {/* QR Codes Card */}
-          <div className="p-6 rounded-3xl bg-zinc-950 border border-white/5 md:col-span-2">
+          <div id="qr-codes" className="p-6 rounded-3xl bg-zinc-950 border border-white/5 md:col-span-2 scroll-mt-24">
             <h3 className="text-lg font-semibold mb-4 text-zinc-300">Gym Check-in QR Codes</h3>
             <p className="text-sm text-zinc-500 mb-6">Show these QR codes at the front desk to check in.</p>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-3 gap-4">
               {householdMembers.map((m, i) => (
                 m.profile && (
                   <MemberQRCode 

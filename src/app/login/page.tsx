@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { ArrowLeft, Eye, EyeOff, CheckCircle2, XCircle } from 'lucide-react'
 import { login, signup } from './actions'
+import { createBrowserClient } from '@supabase/ssr'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -17,6 +18,17 @@ export default function LoginPage() {
   
   const [showPassword, setShowPassword] = useState(false)
   const [passwordMismatch, setPasswordMismatch] = useState(false)
+
+  // Redirect logged-in users to dashboard
+  useEffect(() => {
+    const supabase = createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    )
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) router.replace('/dashboard')
+    })
+  }, [router])
   
   const [showSuccessModal, setShowSuccessModal] = useState(false)
   const [showErrorModal, setShowErrorModal] = useState(false)
@@ -224,9 +236,16 @@ export default function LoginPage() {
             )}
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-zinc-300">
-                Password
-              </label>
+              <div className="flex items-center justify-between">
+                <label htmlFor="password" className="block text-sm font-medium text-zinc-300">
+                  Password
+                </label>
+                {!isRegister && (
+                  <Link href="/forgot-password" className="text-xs font-medium text-red-500 hover:text-red-400 transition-colors">
+                    Forgot password?
+                  </Link>
+                )}
+              </div>
               <div className="mt-2 relative">
                 <input
                   id="password"

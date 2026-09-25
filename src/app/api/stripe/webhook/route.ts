@@ -10,6 +10,19 @@ function getAdminClient() {
   )
 }
 
+// Safely convert a Stripe timestamp (seconds or object) to a date string
+function toDateString(val: any): string | null {
+  if (!val) return null
+  // Newer Stripe API might return a number (unix seconds) or an object
+  const ts = typeof val === 'number' ? val : (val?.seconds ?? val?.unix ?? null)
+  if (!ts) return null
+  try {
+    return new Date(ts * 1000).toISOString().split('T')[0]
+  } catch {
+    return null
+  }
+}
+
 export async function POST(request: NextRequest) {
   const body = await request.text()
   const signature = request.headers.get('stripe-signature')
@@ -34,116 +47,131 @@ export async function POST(request: NextRequest) {
 
   console.log('STRIPE WEBHOOK:', event.type)
 
-  switch (event.type) {
-    case 'checkout.session.completed': {
-      const session = event.data.object
-      const householdId = session.metadata?.household_id
-      const planId = session.metadata?.plan_id
-      const stripeSubscriptionId = session.subscription
+  try {
+    switch (event.type) {
+      case 'checkout.session.completed': {
+        const session = event.data.object
+        const householdId = session.metadata?.household_id
+        const planId = session.metadata?.plan_id
+        const stripeSubscriptionId = session.subscription
 
-      if (householdId && planId && stripeSubscriptionId) {
-        // Fetch the subscription from Stripe to get the current period
-        const sub = await stripe.subscriptions.retrieve(stripeSubscriptionId as string)
+        console.log('WEBHOOK DEBUG checkout.session.completed:', { householdId, planId, stripeSubscriptionId })
 
-        // Upsert subscription in our database
-        const { error } = await supabase.from('subscriptions').upsert({
-          household_id: householdId,
-          plan_id: planId,
-          status: 'Active',
-          start_date: new Date(sub.current_period_start * 1000).toISOString().split('T')[0],
-          end_date: sub.current_period_end
-            ? new Date(sub.current_period_end * 1000).toISOString().split('T')[0]
-            : null,
-          stripe_subscription_id: stripeSubscriptionId,
-        }, {
-          onConflict: 'household_id'
-        })
+        if (householdId && planId && stripeSubscriptionId) {
+          // Fetch the subscription from Stripe to get the current period
+          const sub = await stripe.subscriptions.retrieve(stripeSubscriptionId as string)
 
-        if (error) {
-          console.error('Failed to upsert subscription:', error)
-        } else {
-          console.log('Subscription activated for household:', householdId)
+          console.log('WEBHOOK DEBUG subscription object keys:', Object.keys(sub))
+          console.log('WEBHOOK DEBUG current_period_start:', sub.current_period_start, typeof sub.current_period_start)
+          console.log('WEBHOOK DEBUG current_period_end:', sub.current_period_end, typeof sub.current_period_end)
+
+          const startDate = toDateString(sub.current_period_start) || new Date().toISOString().split('T')[0]
+          const endDate = toDateString(sub.current_period_end)
+
+          console.log('WEBHOOK DEBUG dates:', { startDate, endDate })
+
+          // Upsert subscription in our database
+          const { error } = await supabase.from('subscriptions').upsert({
+            household_id: householdId,
+            plan_id: planId,
+            status: 'Active',
+            start_date: startDate,
+            end_date: endDate,
+            stripe_subscription_id: stripeSubscriptionId,
+          }, {
+            onConflict: 'household_id'
+          })
+
+          if (error) {
+            console.error('Failed to upsert subscription:', error)
+          } else {
+            console.log('Subscription activated for household:', householdId)
+          }
         }
+        break
       }
-      break
-    }
 
-    case 'invoice.paid': {
-      const invoice = event.data.object
-      const stripeSubId = invoice.subscription
+      case 'invoice.paid': {
+        const invoice = event.data.object
+        const stripeSubId = invoice.subscription
 
-      if (stripeSubId) {
-        const sub = await stripe.subscriptions.retrieve(stripeSubId as string)
+        if (stripeSubId) {
+          const sub = await stripe.subscriptions.retrieve(stripeSubId as string)
+          const householdId = sub.metadata?.household_id
+
+          if (householdId) {
+            const startDate = toDateString(sub.current_period_start) || new Date().toISOString().split('T')[0]
+            const endDate = toDateString(sub.current_period_end)
+
+            await supabase.from('subscriptions')
+              .update({
+                status: 'Active',
+                start_date: startDate,
+                end_date: endDate,
+              })
+              .eq('household_id', householdId)
+
+            console.log('Subscription renewed for household:', householdId)
+          }
+        }
+        break
+      }
+
+      case 'invoice.payment_failed': {
+        const invoice = event.data.object
+        const stripeSubId = invoice.subscription
+
+        if (stripeSubId) {
+          const sub = await stripe.subscriptions.retrieve(stripeSubId as string)
+          const householdId = sub.metadata?.household_id
+
+          if (householdId) {
+            await supabase.from('subscriptions')
+              .update({ status: 'Past_Due' })
+              .eq('household_id', householdId)
+
+            console.log('Payment failed for household:', householdId)
+          }
+        }
+        break
+      }
+
+      case 'customer.subscription.updated': {
+        const sub = event.data.object
+        const householdId = sub.metadata?.household_id
+
+        if (householdId) {
+          let status = 'Active'
+          if (sub.status === 'canceled') status = 'Cancelled'
+          else if (sub.status === 'past_due') status = 'Past_Due'
+          else if (sub.status === 'paused') status = 'Frozen'
+
+          await supabase.from('subscriptions')
+            .update({ status })
+            .eq('household_id', householdId)
+
+          console.log('Subscription status updated to', status, 'for household:', householdId)
+        }
+        break
+      }
+
+      case 'customer.subscription.deleted': {
+        const sub = event.data.object
         const householdId = sub.metadata?.household_id
 
         if (householdId) {
           await supabase.from('subscriptions')
-            .update({
-              status: 'Active',
-              start_date: new Date(sub.current_period_start * 1000).toISOString().split('T')[0],
-              end_date: sub.current_period_end
-                ? new Date(sub.current_period_end * 1000).toISOString().split('T')[0]
-                : null,
-            })
+            .update({ status: 'Cancelled' })
             .eq('household_id', householdId)
 
-          console.log('Subscription renewed for household:', householdId)
+          console.log('Subscription cancelled for household:', householdId)
         }
+        break
       }
-      break
     }
-
-    case 'invoice.payment_failed': {
-      const invoice = event.data.object
-      const stripeSubId = invoice.subscription
-
-      if (stripeSubId) {
-        const sub = await stripe.subscriptions.retrieve(stripeSubId as string)
-        const householdId = sub.metadata?.household_id
-
-        if (householdId) {
-          await supabase.from('subscriptions')
-            .update({ status: 'Past_Due' })
-            .eq('household_id', householdId)
-
-          console.log('Payment failed for household:', householdId)
-        }
-      }
-      break
-    }
-
-    case 'customer.subscription.updated': {
-      const sub = event.data.object
-      const householdId = sub.metadata?.household_id
-
-      if (householdId) {
-        let status = 'Active'
-        if (sub.status === 'canceled') status = 'Cancelled'
-        else if (sub.status === 'past_due') status = 'Past_Due'
-        else if (sub.status === 'paused') status = 'Frozen'
-
-        await supabase.from('subscriptions')
-          .update({ status })
-          .eq('household_id', householdId)
-
-        console.log('Subscription status updated to', status, 'for household:', householdId)
-      }
-      break
-    }
-
-    case 'customer.subscription.deleted': {
-      const sub = event.data.object
-      const householdId = sub.metadata?.household_id
-
-      if (householdId) {
-        await supabase.from('subscriptions')
-          .update({ status: 'Cancelled' })
-          .eq('household_id', householdId)
-
-        console.log('Subscription cancelled for household:', householdId)
-      }
-      break
-    }
+  } catch (err: any) {
+    console.error('WEBHOOK HANDLER ERROR:', err.message, err.stack)
+    return NextResponse.json({ error: err.message }, { status: 500 })
   }
 
   return NextResponse.json({ received: true })

@@ -43,13 +43,13 @@ export default function CheckinScanner() {
     const isAllowed = result.status === 'allowed'
     return (
       <div className="text-center">
-        <div className={`w-full rounded-3xl p-12 border-2 ${
+        <div className={`w-full rounded-2xl sm:rounded-3xl p-6 sm:p-12 border-2 ${
           isAllowed 
             ? 'bg-green-950/30 border-green-500/30' 
             : 'bg-red-950/30 border-red-500/30'
         }`}>
           {/* Big Status Icon */}
-          <div className={`w-32 h-32 rounded-full mx-auto mb-6 flex items-center justify-center text-7xl font-black ${
+          <div className={`w-20 h-20 sm:w-32 sm:h-32 rounded-full mx-auto mb-4 sm:mb-6 flex items-center justify-center text-4xl sm:text-7xl font-black ${
             isAllowed ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
           }`}>
             {isAllowed ? '✓' : '✗'}
@@ -57,13 +57,13 @@ export default function CheckinScanner() {
 
           {/* Member Name */}
           {result.member && (
-            <h2 className="text-3xl font-black mb-2">
+            <h2 className="text-xl sm:text-3xl font-black mb-2">
               {result.member.first_name} {result.member.last_name}
             </h2>
           )}
 
           {/* Status */}
-          <div className={`inline-block px-4 py-2 rounded-xl text-sm font-bold mb-4 ${
+          <div className={`inline-block px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm font-bold mb-3 sm:mb-4 ${
             isAllowed
               ? 'bg-green-500/10 text-green-400 border border-green-500/20'
               : 'bg-red-500/10 text-red-400 border border-red-500/20'
@@ -73,18 +73,18 @@ export default function CheckinScanner() {
 
           {/* Plan */}
           {result.plan && (
-            <p className="text-zinc-400 text-sm mb-2">Plan: {result.plan.name}</p>
+            <p className="text-zinc-400 text-xs sm:text-sm mb-2">Plan: {result.plan.name}</p>
           )}
 
           {/* Message */}
-          <p className={`text-lg ${isAllowed ? 'text-green-300' : 'text-red-300'}`}>
+          <p className={`text-sm sm:text-lg ${isAllowed ? 'text-green-300' : 'text-red-300'}`}>
             {result.message}
           </p>
         </div>
 
         <button
           onClick={resetScanner}
-          className="mt-8 px-8 py-3 bg-white text-black font-bold text-sm rounded-xl hover:bg-zinc-200 transition-colors active:scale-95"
+          className="mt-6 sm:mt-8 px-6 sm:px-8 py-3 bg-white text-black font-bold text-sm rounded-xl hover:bg-zinc-200 transition-colors active:scale-95"
         >
           Scan Next Member
         </button>
@@ -96,12 +96,12 @@ export default function CheckinScanner() {
   return (
     <div className="space-y-6">
       {/* Manual Entry */}
-      <div className="bg-zinc-950 border border-white/5 rounded-3xl p-8">
-        <h3 className="text-lg font-bold mb-4 text-zinc-300">Enter Member ID</h3>
-        <p className="text-sm text-zinc-500 mb-6">
+      <div className="bg-zinc-950 border border-white/5 rounded-2xl sm:rounded-3xl p-5 sm:p-8">
+        <h3 className="text-base sm:text-lg font-bold mb-3 sm:mb-4 text-zinc-300">Enter Member ID</h3>
+        <p className="text-xs sm:text-sm text-zinc-500 mb-4 sm:mb-6">
           Scan the QR code with a USB scanner (it types the ID automatically) or paste it manually.
         </p>
-        <form onSubmit={(e) => { e.preventDefault(); handleCheckin() }} className="flex gap-3">
+        <form onSubmit={(e) => { e.preventDefault(); handleCheckin() }} className="flex flex-col sm:flex-row gap-3">
           <input
             type="text"
             value={profileId}
@@ -121,7 +121,7 @@ export default function CheckinScanner() {
       </div>
 
       {/* Quick tips */}
-      <div className="text-center text-zinc-600 text-xs">
+      <div className="text-center text-zinc-600 text-xs px-4">
         <p>USB barcode/QR scanners automatically type the member ID and press Enter.</p>
         <p>Just focus this page and scan — it works like a keyboard.</p>
       </div>

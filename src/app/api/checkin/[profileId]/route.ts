@@ -8,6 +8,28 @@ function getAdminClient() {
   )
 }
 
+// Helper: log every check-in attempt (success or denial) for auditing
+async function logCheckin(
+  supabase: any,
+  profileId: string,
+  statusFlag: string
+) {
+  const { data: facility } = await supabase
+    .from('facilities')
+    .select('id')
+    .limit(1)
+    .single()
+
+  if (facility) {
+    await supabase.from('gym_checkins').insert({
+      profile_id: profileId,
+      facility_id: facility.id,
+      checkin_method: 'qr_scanner',
+      status_flag: statusFlag,
+    })
+  }
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ profileId: string }> }
@@ -18,7 +40,6 @@ export async function GET(
     return NextResponse.json({ error: 'Missing profileId' }, { status: 400 })
   }
 
-  // Use admin client since front-desk staff may not be the member
   const supabase = getAdminClient()
 
   // 1. Get profile
@@ -36,14 +57,15 @@ export async function GET(
     }, { status: 404 })
   }
 
-  // 2. Find their household
+  // 2. Find their household + their role
   const { data: hm } = await supabase
     .from('household_members')
-    .select('household_id')
+    .select('household_id, role')
     .eq('profile_id', profileId)
     .single()
 
   if (!hm) {
+    await logCheckin(supabase, profileId, 'No Active Pass')
     return NextResponse.json({
       status: 'denied',
       member: profile,
@@ -52,17 +74,16 @@ export async function GET(
     })
   }
 
-  // 3. Check subscription
+  // 3. Check subscription + plan details
   const { data: subscription } = await supabase
     .from('subscriptions')
-    .select('status, plan_id, end_date, membership_plans(name)')
+    .select('status, plan_id, end_date, payment_method, membership_plans(name, max_dependents)')
     .eq('household_id', hm.household_id)
     .eq('status', 'Active')
     .limit(1)
     .maybeSingle()
 
   if (!subscription) {
-    // Check if past_due
     const { data: pastDueSub } = await supabase
       .from('subscriptions')
       .select('status')
@@ -71,15 +92,52 @@ export async function GET(
       .limit(1)
       .maybeSingle()
 
+    const flag = pastDueSub ? 'Payment Due' : 'No Active Pass'
+    await logCheckin(supabase, profileId, flag)
     return NextResponse.json({
       status: 'denied',
       member: profile,
-      flag: pastDueSub ? 'Payment Due' : 'No Active Pass',
+      flag,
       message: pastDueSub ? 'Payment is past due' : 'No active membership found'
     })
   }
 
-  // 4. Check waiver
+  // 3b. CHECK EXPIRY for cash subscriptions
+  if (subscription.end_date) {
+    const endDate = new Date(subscription.end_date)
+    const now = new Date()
+    if (now > endDate) {
+      // Auto-expire the subscription
+      await supabase
+        .from('subscriptions')
+        .update({ status: 'Cancelled' })
+        .eq('household_id', hm.household_id)
+        .eq('status', 'Active')
+
+      await logCheckin(supabase, profileId, 'Membership Expired')
+      return NextResponse.json({
+        status: 'denied',
+        member: profile,
+        flag: 'Membership Expired',
+        message: `Membership expired on ${endDate.toLocaleDateString()}. Please renew to regain access.`
+      })
+    }
+  }
+
+  // 4. INDIVIDUAL PLAN GATE
+  const plan = subscription.membership_plans as any
+  if (plan && plan.max_dependents === 0 && hm.role !== 'Primary') {
+    await logCheckin(supabase, profileId, 'No Active Pass')
+    return NextResponse.json({
+      status: 'denied',
+      member: profile,
+      flag: 'No Active Pass',
+      plan: { name: plan.name },
+      message: `${plan.name} only covers the primary account holder. Upgrade to a Family plan to cover dependents.`
+    })
+  }
+
+  // 5. Check waiver
   const { data: waivers } = await supabase
     .from('waivers')
     .select('id')
@@ -88,6 +146,7 @@ export async function GET(
     .limit(1)
 
   if (!waivers || waivers.length === 0) {
+    await logCheckin(supabase, profileId, 'Waiver Expired')
     return NextResponse.json({
       status: 'denied',
       member: profile,
@@ -96,28 +155,13 @@ export async function GET(
     })
   }
 
-  // 5. All checks passed — record check-in
-  // Get a facility (use first available for now)
-  const { data: facility } = await supabase
-    .from('facilities')
-    .select('id')
-    .limit(1)
-    .single()
-
-  if (facility) {
-    await supabase.from('gym_checkins').insert({
-      profile_id: profileId,
-      facility_id: facility.id,
-      checkin_method: 'qr_scanner',
-      status_flag: 'Success'
-    })
-  }
-
+  // 6. All checks passed
+  await logCheckin(supabase, profileId, 'Success')
   return NextResponse.json({
     status: 'allowed',
     member: profile,
     flag: 'Success',
-    plan: subscription.membership_plans,
+    plan: { name: plan?.name },
     message: 'Welcome! Enjoy your workout.'
   })
 }

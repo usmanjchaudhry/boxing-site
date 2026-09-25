@@ -35,7 +35,7 @@ export default async function MembershipsPage() {
         .limit(1)
         .maybeSingle()
 
-      if (sub) {
+      if (sub && sub.status === 'Active') {
         currentPlanId = sub.plan_id
         subscriptionStatus = sub.status
       }
@@ -53,28 +53,28 @@ export default async function MembershipsPage() {
     <div className="min-h-screen bg-black text-white font-sans selection:bg-red-500 selection:text-white">
       <Navbar />
 
-      <main className="max-w-7xl mx-auto px-6 py-16">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-10 sm:py-16">
         {/* Header */}
-        <div className="text-center mb-16">
-          <h1 className="text-5xl font-black mb-4 bg-gradient-to-r from-white via-zinc-300 to-zinc-500 bg-clip-text text-transparent">
+        <div className="text-center mb-10 sm:mb-16">
+          <h1 className="text-3xl sm:text-5xl font-black mb-4 bg-gradient-to-r from-white via-zinc-300 to-zinc-500 bg-clip-text text-transparent">
             Choose Your Plan
           </h1>
-          <p className="text-zinc-400 text-lg max-w-xl mx-auto">
+          <p className="text-zinc-400 text-sm sm:text-lg max-w-xl mx-auto">
             Unlock full gym access for yourself or your entire family. Cancel anytime.
           </p>
         </div>
 
         {/* Current Subscription Banner */}
-        {currentPlanId && (
+        {currentPlanId && subscriptionStatus === 'Active' && (
           <div className="mb-10 p-4 rounded-2xl bg-green-500/10 border border-green-500/20 text-center">
             <p className="text-green-400 font-bold text-sm">
-              ✓ You have an active subscription ({subscriptionStatus})
+              ✓ You have an active subscription
             </p>
           </div>
         )}
 
         {/* Plans Grid */}
-        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
           {(plans || []).map((plan) => (
             <PlanCard
               key={plan.id}
