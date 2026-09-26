@@ -59,11 +59,8 @@ export async function POST(request: NextRequest) {
 
         if (householdId && planId && stripeSubscriptionId) {
           // Fetch the subscription from Stripe to get the current period
-          const sub = await stripe.subscriptions.retrieve(stripeSubscriptionId as string)
-
-          console.log('WEBHOOK DEBUG subscription object keys:', Object.keys(sub))
-          console.log('WEBHOOK DEBUG current_period_start:', sub.current_period_start, typeof sub.current_period_start)
-          console.log('WEBHOOK DEBUG current_period_end:', sub.current_period_end, typeof sub.current_period_end)
+          const subResponse = await stripe.subscriptions.retrieve(stripeSubscriptionId as string)
+          const sub = 'data' in subResponse ? (subResponse as any).data : subResponse
 
           const startDate = toDateString(sub.current_period_start) || new Date().toISOString().split('T')[0]
           const endDate = toDateString(sub.current_period_end)
@@ -96,7 +93,8 @@ export async function POST(request: NextRequest) {
         const stripeSubId = invoice.subscription
 
         if (stripeSubId) {
-          const sub = await stripe.subscriptions.retrieve(stripeSubId as string)
+          const subResponse = await stripe.subscriptions.retrieve(stripeSubId as string)
+          const sub = 'data' in subResponse ? (subResponse as any).data : subResponse
           const householdId = sub.metadata?.household_id
 
           if (householdId) {
@@ -122,7 +120,8 @@ export async function POST(request: NextRequest) {
         const stripeSubId = invoice.subscription
 
         if (stripeSubId) {
-          const sub = await stripe.subscriptions.retrieve(stripeSubId as string)
+          const subResponse = await stripe.subscriptions.retrieve(stripeSubId as string)
+          const sub = 'data' in subResponse ? (subResponse as any).data : subResponse
           const householdId = sub.metadata?.household_id
 
           if (householdId) {

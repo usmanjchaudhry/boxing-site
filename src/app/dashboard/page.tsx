@@ -94,7 +94,7 @@ export default async function DashboardPage() {
           .eq('is_valid', true)
           .limit(1)
 
-        waiverStatusMap[member.profile.id] = (waivers && waivers.length > 0)
+        waiverStatusMap[member.profile.id] = !!(waivers && waivers.length > 0)
       }
     }
   }
