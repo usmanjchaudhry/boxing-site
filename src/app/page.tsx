@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { ArrowRight, Trophy, Users, CalendarDays } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import { createClient } from "@/utils/supabase/server";
@@ -89,6 +90,132 @@ export default async function Home() {
           </div>
         </div>
       </section>
+
+      {/* Gym Gallery Section */}
+      <section id="gallery" className="py-16 sm:py-24 bg-black border-t border-white/5">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6">
+          {/* Section Header */}
+          <div className="text-center mb-12 sm:mb-16">
+            <p className="text-red-500 text-sm font-bold uppercase tracking-[0.2em] mb-3">Inside the Club</p>
+            <h2 className="text-3xl sm:text-5xl font-black tracking-tighter mb-4">
+              WHERE CHAMPIONS <span className="text-transparent bg-clip-text bg-gradient-to-r from-red-500 to-orange-500">ARE MADE</span>
+            </h2>
+            <p className="text-zinc-400 text-base sm:text-lg max-w-2xl mx-auto">
+              State-of-the-art facilities designed for serious training. Every detail built to push you further.
+            </p>
+          </div>
+
+          {/* Bento Grid Gallery */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 auto-rows-[200px] sm:auto-rows-[250px]">
+            {/* Large hero image — spans 2 cols, 2 rows */}
+            <div className="relative rounded-2xl sm:rounded-3xl overflow-hidden group sm:col-span-2 lg:col-span-2 row-span-2 border border-white/5">
+              <Image
+                src="/gym-interior.jpg"
+                alt="Premium boxing gym interior with heavy bags and full-size ring"
+                fill
+                className="object-cover transition-transform duration-700 group-hover:scale-105"
+                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 50vw"
+                priority
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-60 group-hover:opacity-80 transition-opacity duration-500" />
+              <div className="absolute bottom-0 left-0 right-0 p-5 sm:p-8 translate-y-2 group-hover:translate-y-0 transition-transform duration-500">
+                <span className="text-red-400 text-xs font-bold uppercase tracking-wider">The Floor</span>
+                <h3 className="text-xl sm:text-2xl font-black text-white mt-1">World-Class Facility</h3>
+                <p className="text-zinc-300 text-sm mt-1 opacity-0 group-hover:opacity-100 transition-opacity duration-500">
+                  Full-size ring, heavy bags, speed bags, and everything you need to train at the highest level.
+                </p>
+              </div>
+            </div>
+
+            {/* Training shot */}
+            <div className="relative rounded-2xl sm:rounded-3xl overflow-hidden group row-span-2 border border-white/5">
+              <Image
+                src="/gym-training.jpg"
+                alt="Boxer training with heavy bag in dramatic lighting"
+                fill
+                className="object-cover transition-transform duration-700 group-hover:scale-105"
+                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-60 group-hover:opacity-80 transition-opacity duration-500" />
+              <div className="absolute bottom-0 left-0 right-0 p-5 translate-y-2 group-hover:translate-y-0 transition-transform duration-500">
+                <span className="text-red-400 text-xs font-bold uppercase tracking-wider">Training</span>
+                <h3 className="text-lg font-black text-white mt-1">Bag Work</h3>
+              </div>
+            </div>
+
+            {/* Gloves detail */}
+            <div className="relative rounded-2xl sm:rounded-3xl overflow-hidden group border border-white/5">
+              <Image
+                src="/gym-gloves.jpg"
+                alt="Red boxing gloves hanging on the ring ropes"
+                fill
+                className="object-cover transition-transform duration-700 group-hover:scale-105"
+                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent opacity-60 group-hover:opacity-80 transition-opacity duration-500" />
+              <div className="absolute bottom-0 left-0 right-0 p-5 translate-y-2 group-hover:translate-y-0 transition-transform duration-500">
+                <span className="text-red-400 text-xs font-bold uppercase tracking-wider">Gear</span>
+                <h3 className="text-lg font-black text-white mt-1">Premium Equipment</h3>
+              </div>
+            </div>
+
+            {/* Weights detail */}
+            <div className="relative rounded-2xl sm:rounded-3xl overflow-hidden group border border-white/5">
+              <Image
+                src="/gym-weights.jpg"
+                alt="Weight training area with dumbbells and kettlebells"
+                fill
+                className="object-cover transition-transform duration-700 group-hover:scale-105"
+                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent opacity-60 group-hover:opacity-80 transition-opacity duration-500" />
+              <div className="absolute bottom-0 left-0 right-0 p-5 translate-y-2 group-hover:translate-y-0 transition-transform duration-500">
+                <span className="text-red-400 text-xs font-bold uppercase tracking-wider">Strength</span>
+                <h3 className="text-lg font-black text-white mt-1">Weight Room</h3>
+              </div>
+            </div>
+
+            {/* Group class — spans 2 cols */}
+            <div className="relative rounded-2xl sm:rounded-3xl overflow-hidden group sm:col-span-2 border border-white/5">
+              <Image
+                src="/gym-class.jpg"
+                alt="High-energy group boxing fitness class in action"
+                fill
+                className="object-cover transition-transform duration-700 group-hover:scale-105"
+                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 100vw, 50vw"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-60 group-hover:opacity-80 transition-opacity duration-500" />
+              <div className="absolute bottom-0 left-0 right-0 p-5 sm:p-8 translate-y-2 group-hover:translate-y-0 transition-transform duration-500">
+                <span className="text-red-400 text-xs font-bold uppercase tracking-wider">Classes</span>
+                <h3 className="text-xl sm:text-2xl font-black text-white mt-1">Group Training Sessions</h3>
+                <p className="text-zinc-300 text-sm mt-1 opacity-0 group-hover:opacity-100 transition-opacity duration-500">
+                  High-energy classes led by expert coaches. All levels welcome.
+                </p>
+              </div>
+            </div>
+
+            {/* Sparring — spans 2 cols */}
+            <div className="relative rounded-2xl sm:rounded-3xl overflow-hidden group sm:col-span-2 border border-white/5">
+              <Image
+                src="/gym-sparring.jpg"
+                alt="Two boxers sparring in a professional ring"
+                fill
+                className="object-cover transition-transform duration-700 group-hover:scale-105"
+                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 100vw, 50vw"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-60 group-hover:opacity-80 transition-opacity duration-500" />
+              <div className="absolute bottom-0 left-0 right-0 p-5 sm:p-8 translate-y-2 group-hover:translate-y-0 transition-transform duration-500">
+                <span className="text-red-400 text-xs font-bold uppercase tracking-wider">Ring Time</span>
+                <h3 className="text-xl sm:text-2xl font-black text-white mt-1">Sparring & Competition Prep</h3>
+                <p className="text-zinc-300 text-sm mt-1 opacity-0 group-hover:opacity-100 transition-opacity duration-500">
+                  Controlled sparring sessions to sharpen your skills under professional supervision.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
     </div>
   );
 }
+
