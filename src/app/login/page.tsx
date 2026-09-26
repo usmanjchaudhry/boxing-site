@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { ArrowLeft, Eye, EyeOff, CheckCircle2, XCircle } from 'lucide-react'
@@ -8,6 +8,18 @@ import { login, signup } from './actions'
 import { createBrowserClient } from '@supabase/ssr'
 
 export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="text-zinc-500 text-sm">Loading...</div>
+      </div>
+    }>
+      <LoginPageContent />
+    </Suspense>
+  )
+}
+
+function LoginPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const urlError = searchParams.get('error')
