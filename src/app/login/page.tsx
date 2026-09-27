@@ -84,14 +84,13 @@ function LoginPageContent() {
       
     } else {
       const res = await login(formData)
-      setIsLoading(false)
       
       if (res.error) {
+        setIsLoading(false)
         setModalMessage(res.error)
         setShowErrorModal(true)
       } else {
-        // If login is successful, you could show a modal, but standard UX is to just redirect immediately.
-        // If you prefer a modal for login too, you can set it here. We'll just redirect to dashboard or home.
+        // Keep spinner active — page will navigate away and unmount this component
         router.push('/')
       }
     }

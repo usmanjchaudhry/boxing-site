@@ -1,0 +1,277 @@
+============================================================
+SLIDE 1 — TITLE SLIDE
+============================================================
+
+YOUR GYM, ONLINE.
+A Custom Digital Platform for [Gym Name]
+
+Built by [Your Name]
+[Today's Date]
+
+
+============================================================
+SLIDE 2 — THE PROBLEM
+============================================================
+
+Opening a gym? You need more than equipment.
+
+• Members expect to sign up and pay online — not walk in with cash
+• Paper waivers get lost, create liability gaps
+• Manual check-in sheets are slow and unreliable
+• Off-the-shelf platforms like Mindbody charge $200–$400/month + transaction fees
+• You deserve a platform that's YOURS — not rented
+
+
+============================================================
+SLIDE 3 — THE SOLUTION
+============================================================
+
+A fully custom platform — built for YOUR gym.
+
+✅ Premium landing page that looks like a million-dollar brand
+✅ Online membership sign-up with Stripe payments
+✅ Digital waiver signatures (no more paper)
+✅ QR code check-in at the front desk
+✅ Family/household management for family plans
+✅ Full admin dashboard for staff
+✅ Class schedule page
+✅ Mobile-friendly — works on any device
+
+Everything goes directly to YOUR Stripe account.
+I never touch your money.
+
+
+============================================================
+SLIDE 4 — LIVE DEMO: THE MEMBER EXPERIENCE
+============================================================
+
+[DEMO — show these on screen]
+Dev Site: https://boxing-site-git-dev-usmanjchaudhrys-projects.vercel.app
+
+1. Landing Page
+   → Premium design, gym gallery, address, hours
+
+2. Registration
+   → Member creates an account in 30 seconds
+
+3. Choose a Plan & Pay
+   → Stripe checkout — money goes directly to your bank
+
+4. Member Dashboard
+   → QR code for check-in
+   → Add family members (dependents)
+   → Sign digital waivers
+
+5. Class Schedule
+   → Browse weekly classes, filter by type
+
+
+============================================================
+SLIDE 5 — LIVE DEMO: THE STAFF EXPERIENCE
+============================================================
+
+[DEMO — show these on screen]
+Dev Site: https://boxing-site-git-dev-usmanjchaudhrys-projects.vercel.app
+
+1. Admin Dashboard
+   → Total members, active subscriptions, today's check-ins
+
+2. QR Check-in Scanner
+   → Scan a member's phone at the front desk — instant check-in
+
+3. Member Management
+   → View all members, change roles, see waiver status
+
+4. Payment History
+   → See every Stripe transaction in real time
+
+5. Cash Payment Recording
+   → Record walk-in cash payments and link to a plan
+
+
+============================================================
+SLIDE 6 — HOW PAYMENTS WORK
+============================================================
+
+Stripe — the same platform used by Amazon, Shopify, and Lyft.
+
+• Members pay online → money lands in YOUR bank account
+• Automatic recurring billing (monthly plans)
+• Failed payment handling — members get notified automatically
+• Full transaction history visible in your admin dashboard
+• Test mode right now — goes live when you create your Stripe business account
+
+You see every dollar. I see none.
+
+
+============================================================
+SLIDE 7 — VS. GLOFOX, MINDBODY & OFF-THE-SHELF PLATFORMS
+============================================================
+
+"But can't we just use Glofox or Mindbody?"
+Let's break down the REAL cost. There are 3 types of fees:
+
+─────────────────────────────────────────────────────────
+
+FEE #1: MONTHLY BASE FEE (the subscription to use their software)
+  • Glofox charges $110–$250+/month just to log in and use it
+  • This is a flat fee you pay whether you have 5 members or 500
+  • Think of it like rent — you pay it just to exist on their platform
+
+FEE #2: PLATFORM TRANSACTION FEE (their cut of every sale)
+  • Glofox/Mindbody take an additional 2–2.5% of every payment
+  • This is THEIR fee — on top of credit card processing
+  • At $25K/month revenue, that's ~$500–$625/month going to THEM
+
+FEE #3: CREDIT CARD PROCESSING (Stripe — everyone pays this)
+  • Stripe charges 2.9% + 30¢ per transaction to process the card
+  • This is unavoidable — every business pays this no matter what
+  • At $25K/month, that's ~$725/month
+  • This fee is the SAME whether you use Glofox, me, or anyone
+
+─────────────────────────────────────────────────────────
+
+SIDE-BY-SIDE AT $25K/MONTH REVENUE:
+
+GLOFOX:                              YOUR CUSTOM PLATFORM:
+  Base fee:        ~$200/mo            Base fee:         $0
+  Their cut (2.5%): ~$625/mo           My cut (3%):     $750/mo
+  Stripe (2.9%):   ~$725/mo            Stripe (2.9%):  ~$725/mo
+  ────────────────────────             ────────────────────────
+  TOTAL:          ~$1,550/mo           TOTAL:          ~$1,475/mo
+
+  You own: NOTHING                     You own: EVERYTHING
+
+─────────────────────────────────────────────────────────
+
+BONUS: CASH PAYMENTS — We handle those too.
+  • Walk-in pays cash? Staff logs it in the admin panel
+  • Tracks who paid, what plan, date, and notes
+  • Full cash payment history — no revenue falls through the cracks
+  • Glofox charges extra for POS features. Ours is built in.
+
+─────────────────────────────────────────────────────────
+
+WHY CUSTOM WINS:
+
+❌ Glofox/Mindbody                   ✅ Your Custom Platform
+──────────────────────               ──────────────────────
+You're renting                       You OWN it
+Generic template look                Premium brand — built for YOU
+Platform fees on EVERY transaction   No extra transaction fees
+Call a support queue                 Call ME — fixed same day
+Same features as every gym           Custom features when you need them
+They raise prices? You're stuck.     Your cost only grows with revenue
+They shut down? You lose everything. Your site exists forever
+Cash payments? Extra add-on.         Built in — staff logs it directly
+
+
+============================================================
+SLIDE 8 — MY PRICING
+============================================================
+
+I'm offering a partnership model, not a bill.
+
+Setup Fee:          $1,500 (vs $15,000+ market rate — 90% off)
+Monthly:            3% of revenue processed through the platform
+Minimum Monthly:    $200/month floor
+
+What's included:
+✅ Hosting & domain management
+✅ Bug fixes & maintenance
+✅ Security updates
+✅ Minor feature additions
+✅ Ongoing support
+
+What this means at different revenue levels:
+• $10K/month revenue  →  You pay $300/month
+• $25K/month revenue  →  You pay $750/month
+• $50K/month revenue  →  You pay $1,500/month
+
+Compare to Mindbody at $300+/month PLUS their transaction fees.
+
+
+============================================================
+SLIDE 9 — WHAT I NEED FROM YOU TO GO LIVE
+============================================================
+
+To launch your production site, I need:
+
+1. 🏷️  GYM NAME
+   → What you want the site to say everywhere
+
+2. 🎨  BRAND COLORS
+   → Primary color, accent color (or I'll work with you on it)
+
+3. 🖼️  LOGO
+   → If you have one designed
+
+4. 📸  PHOTOS (see next slide)
+
+5. 💳  STRIPE ACCOUNT
+   → Create a free Stripe business account
+   → Share access so I can connect payments
+
+6. 📅  CLASS SCHEDULE
+   → Your actual classes, times, coaches
+
+7. 🌐  DOMAIN NAME
+   → e.g. yourgymname.com (I can help purchase & set up)
+
+Timeline: 1–2 days after receiving these items.
+
+
+============================================================
+SLIDE 10 — ABOUT PHOTOS
+============================================================
+
+The current site uses AI-generated gym photos as placeholders.
+They look great — but YOUR gym will look better.
+
+BEST OPTION (Recommended):
+→ Take professional photos of your actual gym
+→ The ring, heavy bags, training areas, weight room
+→ Action shots of classes and training sessions
+→ Even phone photos in good lighting work great
+
+I need 6–10 photos:
+• Gym interior / main floor
+• Boxing ring (if applicable)
+• Training in action (bag work, mitt work)
+• Group class in session
+• Weight / conditioning area
+• Equipment close-ups (gloves, wraps, etc.)
+
+ALTERNATIVE:
+→ I can source professional stock photos or generate
+   custom AI images that match your gym's vibe
+→ This works for launch, then swap in real photos later
+
+BOTTOM LINE: Real photos of YOUR gym will always
+convert more members than stock photos.
+
+
+============================================================
+SLIDE 11 — NEXT STEPS
+============================================================
+
+TODAY:
+☐ You decide on the gym name and brand direction
+☐ Start gathering photos (even phone pics work)
+
+THIS WEEK:
+☐ Create your Stripe business account (free, 10 min)
+☐ Send me your class schedule and coach names
+☐ Finalize your membership plan names and prices
+
+LAUNCH:
+☐ I push to production with your custom domain
+☐ Site goes live — start accepting members online
+☐ I train your front desk staff on the admin panel (15 min)
+
+Let's build something great. 🥊
+
+
+============================================================
+END
+============================================================
