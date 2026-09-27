@@ -207,7 +207,15 @@ export default function AdminDashboardClient({ role }: { role: string }) {
       {/* OVERVIEW TAB */}
       {activeTab === 'overview' && (
         <div className="space-y-6">
+          {/* Loading Overlay */}
+          {loading && !stats && (
+            <div className="flex flex-col items-center justify-center py-20 gap-4">
+              <Loader2 className="w-8 h-8 text-red-500 animate-spin" />
+              <p className="text-zinc-400 text-sm font-medium animate-pulse">Loading dashboard data...</p>
+            </div>
+          )}
           {/* Stats Cards */}
+          {(!loading || stats) && (
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="p-6 rounded-2xl bg-zinc-950 border border-white/5">
               <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold mb-2">Total Members</p>
@@ -267,6 +275,7 @@ export default function AdminDashboardClient({ role }: { role: string }) {
               </table>
             </div>
           </div>
+          )}
         </div>
       )}
 

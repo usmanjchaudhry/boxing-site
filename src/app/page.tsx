@@ -1,6 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
-import { ArrowRight, Trophy, Users, CalendarDays } from "lucide-react";
+import { ArrowRight, Trophy, Users, CalendarDays, MapPin, Phone, Mail, Clock } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import { createClient } from "@/utils/supabase/server";
 
@@ -215,6 +215,94 @@ export default async function Home() {
           </div>
         </div>
       </section>
+
+      {/* CTA Strip */}
+      <section className="py-12 sm:py-16 bg-gradient-to-r from-red-950/40 via-red-900/20 to-red-950/40 border-t border-b border-red-500/10">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 text-center">
+          <h2 className="text-2xl sm:text-3xl font-black mb-3">READY TO START YOUR JOURNEY?</h2>
+          <p className="text-zinc-400 text-sm sm:text-base mb-6 max-w-xl mx-auto">
+            Walk in, try a class, and see what you&apos;re made of. Your first session is on us.
+          </p>
+          <Link
+            href={isLoggedIn ? "/dashboard" : "/login?mode=register"}
+            className="inline-flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-8 py-4 rounded-full font-bold text-base transition-all hover:scale-105 active:scale-95 shadow-[0_0_40px_-10px_rgba(220,38,38,0.5)]"
+          >
+            {isLoggedIn ? 'Go to Dashboard' : 'Get Started Free'}
+            <ArrowRight className="w-5 h-5" />
+          </Link>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="bg-zinc-950 border-t border-white/5 pt-12 sm:pt-16 pb-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-10 sm:gap-8 mb-12">
+            {/* Brand & Address */}
+            <div className="lg:col-span-2">
+              <h3 className="text-2xl font-black mb-4">
+                <span className="text-red-600">TITLE</span> BOXING
+              </h3>
+              <div className="space-y-3 text-sm text-zinc-400">
+                <div className="flex items-start gap-3">
+                  <MapPin className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
+                  <div>
+                    <p className="text-zinc-200 font-medium">1247 Champion Boulevard, Suite 200</p>
+                    <p>Los Angeles, CA 90015</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Phone className="w-4 h-4 text-red-500 shrink-0" />
+                  <a href="tel:+12135550147" className="hover:text-white transition-colors">(213) 555-0147</a>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Mail className="w-4 h-4 text-red-500 shrink-0" />
+                  <a href="mailto:info@titleboxing.com" className="hover:text-white transition-colors">info@titleboxing.com</a>
+                </div>
+              </div>
+            </div>
+
+            {/* Hours */}
+            <div>
+              <h4 className="text-sm font-bold text-white uppercase tracking-wider mb-4">Hours</h4>
+              <div className="space-y-2 text-sm text-zinc-400">
+                <div className="flex items-center gap-2">
+                  <Clock className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                  <span className="text-zinc-300 font-medium">Mon–Fri</span>
+                </div>
+                <p className="pl-5.5 ml-[1.375rem]">5:30 AM — 9:00 PM</p>
+                <div className="flex items-center gap-2 pt-1">
+                  <Clock className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                  <span className="text-zinc-300 font-medium">Sat–Sun</span>
+                </div>
+                <p className="pl-5.5 ml-[1.375rem]">7:00 AM — 5:00 PM</p>
+              </div>
+            </div>
+
+            {/* Quick Links */}
+            <div>
+              <h4 className="text-sm font-bold text-white uppercase tracking-wider mb-4">Quick Links</h4>
+              <ul className="space-y-2.5 text-sm">
+                <li><Link href="/schedule" className="text-zinc-400 hover:text-white transition-colors">Class Schedule</Link></li>
+                <li><Link href="/memberships" className="text-zinc-400 hover:text-white transition-colors">Memberships</Link></li>
+                <li><Link href="/login" className="text-zinc-400 hover:text-white transition-colors">Member Login</Link></li>
+                <li><Link href="/dashboard" className="text-zinc-400 hover:text-white transition-colors">Dashboard</Link></li>
+              </ul>
+            </div>
+          </div>
+
+          {/* Bottom Bar */}
+          <div className="border-t border-white/5 pt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <p className="text-xs text-zinc-600">
+              &copy; {new Date().getFullYear()} Title Boxing. All rights reserved.
+            </p>
+            <div className="flex items-center gap-6 text-xs text-zinc-600">
+              <span className="hover:text-zinc-400 transition-colors cursor-pointer">Privacy Policy</span>
+              <span className="hover:text-zinc-400 transition-colors cursor-pointer">Terms of Service</span>
+              <span className="hover:text-zinc-400 transition-colors cursor-pointer">Accessibility</span>
+            </div>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }

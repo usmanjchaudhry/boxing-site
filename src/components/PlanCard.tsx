@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { Loader2 } from 'lucide-react'
 
 interface Plan {
   id: string
@@ -101,7 +102,12 @@ export default function PlanCard({ plan, isCurrentPlan }: { plan: Plan; isCurren
                 : 'bg-white text-black hover:bg-zinc-200'
         }`}
       >
-        {isCurrentPlan ? '✓ Current Plan' : loading ? 'Redirecting...' : !plan.stripe_price_id ? 'Coming Soon' : 'Subscribe'}
+        {isCurrentPlan ? '✓ Current Plan' : loading ? (
+          <span className="flex items-center justify-center gap-2">
+            <Loader2 className="w-4 h-4 animate-spin" />
+            Redirecting...
+          </span>
+        ) : !plan.stripe_price_id ? 'Coming Soon' : 'Subscribe'}
       </button>
     </div>
   )

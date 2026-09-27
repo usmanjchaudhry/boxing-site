@@ -3,7 +3,7 @@
 import { useState, useEffect, Suspense } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { ArrowLeft, Eye, EyeOff, CheckCircle2, XCircle } from 'lucide-react'
+import { ArrowLeft, Eye, EyeOff, CheckCircle2, XCircle, Loader2 } from 'lucide-react'
 import { login, signup } from './actions'
 import { createBrowserClient } from '@supabase/ssr'
 
@@ -324,7 +324,12 @@ function LoginPageContent() {
                 disabled={isLoading}
                 className="flex w-full justify-center items-center rounded-xl bg-white px-3 py-3 text-sm font-bold text-black hover:bg-zinc-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isLoading ? 'Processing...' : isRegister ? 'Create Account' : 'Sign In'}
+                {isLoading ? (
+                  <span className="flex items-center gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    {isRegister ? 'Creating Account...' : 'Signing In...'}
+                  </span>
+                ) : isRegister ? 'Create Account' : 'Sign In'}
               </button>
               
               <div className="relative">
