@@ -182,7 +182,7 @@ export default function SchedulePage() {
             <Users className="w-6 h-6 text-red-500 mx-auto mb-3" />
             <h3 className="font-bold text-sm mb-1">Need Help?</h3>
             <p className="text-xs text-zinc-400">Contact us at</p>
-            <p className="text-xs text-red-400 font-medium">info@titleboxing.com</p>
+            <p className="text-xs text-red-400 font-medium">info@lafamiliashowtime.com</p>
           </div>
         </div>
 

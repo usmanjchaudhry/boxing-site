@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { User, LogOut, Menu, X, ShieldCheck, Calendar } from 'lucide-react'
 
 export default function NavbarClient({ profile, isLoggedIn, isAdmin }: { 
@@ -15,8 +16,9 @@ export default function NavbarClient({ profile, isLoggedIn, isAdmin }: {
     <nav className="border-b border-white/5 bg-black/50 backdrop-blur-md sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 sm:h-20 flex items-center justify-between">
         {/* Logo */}
-        <Link href="/" className="text-xl sm:text-2xl font-bold tracking-tighter flex items-center gap-2 hover:opacity-80 transition-opacity">
-          <span className="text-red-600">TITLE</span> BOXING
+        <Link href="/" className="flex items-center gap-2.5 hover:opacity-80 transition-opacity">
+          <Image src="/logo.jpg" alt="La Familia Showtime Boxing Club" width={44} height={44} className="rounded-full" />
+          <span className="text-lg sm:text-xl font-bold tracking-tight"><span className="text-red-600">LA FAMILIA</span> <span className="hidden lg:inline">SHOWTIME</span></span>
         </Link>
         
         {/* Desktop Nav */}

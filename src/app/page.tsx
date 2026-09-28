@@ -240,7 +240,7 @@ export default async function Home() {
             {/* Brand & Address */}
             <div className="lg:col-span-2">
               <h3 className="text-2xl font-black mb-4">
-                <span className="text-red-600">TITLE</span> BOXING
+                <span className="text-red-600">LA FAMILIA</span> SHOWTIME
               </h3>
               <div className="space-y-3 text-sm text-zinc-400">
                 <div className="flex items-start gap-3">
@@ -256,7 +256,7 @@ export default async function Home() {
                 </div>
                 <div className="flex items-center gap-3">
                   <Mail className="w-4 h-4 text-red-500 shrink-0" />
-                  <a href="mailto:info@titleboxing.com" className="hover:text-white transition-colors">info@titleboxing.com</a>
+                  <a href="mailto:info@lafamiliashowtime.com" className="hover:text-white transition-colors">info@lafamiliashowtime.com</a>
                 </div>
               </div>
             </div>
@@ -293,7 +293,7 @@ export default async function Home() {
           {/* Bottom Bar */}
           <div className="border-t border-white/5 pt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
             <p className="text-xs text-zinc-600">
-              &copy; {new Date().getFullYear()} Title Boxing. All rights reserved.
+              &copy; {new Date().getFullYear()} La Familia Showtime Boxing Club. All rights reserved.
             </p>
             <div className="flex items-center gap-6 text-xs text-zinc-600">
               <span className="hover:text-zinc-400 transition-colors cursor-pointer">Privacy Policy</span>

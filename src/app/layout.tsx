@@ -12,8 +12,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "TITLE BOXING | Member Portal",
-  description: "Enterprise gym management and member portal for TITLE Boxing Club.",
+  title: "La Familia Showtime Boxing Club | Member Portal",
+  description: "Official member portal for La Familia Showtime Boxing Club. Manage your membership, book classes, and train with the best.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
