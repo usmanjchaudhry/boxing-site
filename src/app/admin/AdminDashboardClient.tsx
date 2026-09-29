@@ -1,8 +1,9 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Users, CreditCard, ScanLine, ShieldCheck, RefreshCw, Banknote, Loader2, Search } from 'lucide-react'
+import { Users, CreditCard, ScanLine, ShieldCheck, RefreshCw, Banknote, Loader2, Search, BarChart3 } from 'lucide-react'
 import CheckinScanner from '@/components/CheckinScanner'
+import ReportsTab from '@/components/ReportsTab'
 
 interface Stats {
   totalMembers: number
@@ -44,7 +45,7 @@ interface Member {
   hasAuth: boolean
 }
 
-type Tab = 'overview' | 'checkin' | 'payments' | 'members' | 'cash'
+type Tab = 'overview' | 'checkin' | 'payments' | 'members' | 'cash' | 'reports'
 
 interface Plan {
   id: string
@@ -156,6 +157,7 @@ export default function AdminDashboardClient({ role }: { role: string }) {
 
   const tabs: { id: Tab; label: string; icon: any; adminOnly?: boolean }[] = [
     { id: 'overview', label: 'Overview', icon: ShieldCheck },
+    { id: 'reports', label: 'Reports', icon: BarChart3, adminOnly: true },
     { id: 'checkin', label: 'Check-in Scanner', icon: ScanLine },
     { id: 'cash', label: 'Cash Payments', icon: Banknote, adminOnly: true },
     { id: 'payments', label: 'Stripe Payments', icon: CreditCard, adminOnly: true },
@@ -652,6 +654,10 @@ export default function AdminDashboardClient({ role }: { role: string }) {
             </div>
           </div>
         </div>
+      )}
+      {/* REPORTS TAB */}
+      {activeTab === 'reports' && (
+        <ReportsTab />
       )}
     </main>
   )
