@@ -8,11 +8,11 @@ function getAdminClient() {
   )
 }
 
-// Helper: log every check-in attempt (success or denial) for auditing
 async function logCheckin(
   supabase: any,
   profileId: string,
-  statusFlag: string
+  statusFlag: string,
+  passId?: string
 ) {
   const { data: facility } = await supabase
     .from('facilities')
@@ -26,6 +26,7 @@ async function logCheckin(
       facility_id: facility.id,
       checkin_method: 'qr_scanner',
       status_flag: statusFlag,
+      pass_id: passId || null
     })
   }
 }
@@ -62,82 +63,135 @@ export async function GET(
     .from('household_members')
     .select('household_id, role')
     .eq('profile_id', profileId)
-    .single()
-
-  if (!hm) {
-    await logCheckin(supabase, profileId, 'No Active Pass')
-    return NextResponse.json({
-      status: 'denied',
-      member: profile,
-      flag: 'No Active Pass',
-      message: 'Not associated with any household'
-    })
-  }
-
-  // 3. Check subscription + plan details
-  const { data: subscription } = await supabase
-    .from('subscriptions')
-    .select('status, plan_id, end_date, payment_method, membership_plans(name, max_dependents)')
-    .eq('household_id', hm.household_id)
-    .eq('status', 'Active')
-    .limit(1)
     .maybeSingle()
 
-  if (!subscription) {
-    const { data: pastDueSub } = await supabase
+  let hasValidAccess = false
+  let passIdToConsume: string | undefined = undefined
+  let accessFlag = 'No Active Pass'
+  let accessMessage = 'No active membership or pass found'
+  let planName = ''
+
+  if (hm) {
+    // 3. Check subscription + plan details
+    const { data: subscription } = await supabase
       .from('subscriptions')
-      .select('status')
+      .select('status, plan_id, end_date, payment_method, membership_plans(name, max_dependents, max_daily_checkins)')
       .eq('household_id', hm.household_id)
-      .eq('status', 'Past_Due')
+      .eq('status', 'Active')
       .limit(1)
       .maybeSingle()
 
-    const flag = pastDueSub ? 'Payment Due' : 'No Active Pass'
-    await logCheckin(supabase, profileId, flag)
-    return NextResponse.json({
-      status: 'denied',
-      member: profile,
-      flag,
-      message: pastDueSub ? 'Payment is past due' : 'No active membership found'
-    })
-  }
+    if (subscription) {
+      const plan = subscription.membership_plans as any
+      planName = plan.name
 
-  // 3b. CHECK EXPIRY for cash subscriptions
-  if (subscription.end_date) {
-    const endDate = new Date(subscription.end_date)
-    const now = new Date()
-    if (now > endDate) {
-      // Auto-expire the subscription
-      await supabase
+      // 3b. CHECK EXPIRY for cash subscriptions
+      let isExpired = false
+      if (subscription.end_date) {
+        const endDate = new Date(subscription.end_date)
+        const now = new Date()
+        if (now > endDate) {
+          // Auto-expire the subscription
+          await supabase
+            .from('subscriptions')
+            .update({ status: 'Cancelled' })
+            .eq('household_id', hm.household_id)
+            .eq('status', 'Active')
+
+          isExpired = true
+          accessFlag = 'Membership Expired'
+          accessMessage = `Membership expired on ${endDate.toLocaleDateString()}. Please renew to regain access.`
+        }
+      }
+
+      if (!isExpired) {
+        // 4. INDIVIDUAL PLAN GATE
+        if (plan && plan.max_dependents === 0 && hm.role !== 'Primary') {
+          accessFlag = 'No Active Pass'
+          accessMessage = `${plan.name} only covers the primary account holder. Upgrade to a Family plan to cover dependents.`
+        } else {
+          // 4b. CHECK DAILY LIMIT
+          let underDailyLimit = true
+          if (plan && plan.max_daily_checkins != null) {
+            // Count unique check-ins for the household today
+            const today = new Date()
+            today.setHours(0, 0, 0, 0)
+            
+            const { data: householdMembers } = await supabase
+              .from('household_members')
+              .select('profile_id')
+              .eq('household_id', hm.household_id)
+              
+            const profileIds = householdMembers?.map(m => m.profile_id) || []
+            
+            if (profileIds.length > 0) {
+              const { data: todayCheckins } = await supabase
+                .from('gym_checkins')
+                .select('profile_id')
+                .in('profile_id', profileIds)
+                .eq('status_flag', 'Success')
+                .gte('scanned_at', today.toISOString())
+                
+              const uniqueCheckins = new Set(todayCheckins?.map(c => c.profile_id))
+              // If this profile hasn't checked in yet, and limit is reached, deny.
+              if (!uniqueCheckins.has(profileId) && uniqueCheckins.size >= plan.max_daily_checkins) {
+                underDailyLimit = false
+                accessFlag = 'No Active Pass'
+                accessMessage = `Daily check-in limit of ${plan.max_daily_checkins} reached for this household.`
+              }
+            }
+          }
+          
+          if (underDailyLimit) {
+            hasValidAccess = true
+          }
+        }
+      }
+    } else {
+      // Check past due
+      const { data: pastDueSub } = await supabase
         .from('subscriptions')
-        .update({ status: 'Cancelled' })
+        .select('status')
         .eq('household_id', hm.household_id)
-        .eq('status', 'Active')
-
-      await logCheckin(supabase, profileId, 'Membership Expired')
-      return NextResponse.json({
-        status: 'denied',
-        member: profile,
-        flag: 'Membership Expired',
-        message: `Membership expired on ${endDate.toLocaleDateString()}. Please renew to regain access.`
-      })
+        .eq('status', 'Past_Due')
+        .limit(1)
+        .maybeSingle()
+        
+      if (pastDueSub) {
+        accessFlag = 'Payment Due'
+        accessMessage = 'Payment is past due'
+      }
     }
   }
 
-  // 4. INDIVIDUAL PLAN GATE
-  const plan = subscription.membership_plans as any
-  if (plan && plan.max_dependents === 0 && hm.role !== 'Primary') {
-    await logCheckin(supabase, profileId, 'No Active Pass')
+  // 5. Fallback to Passes table
+  if (!hasValidAccess) {
+    const { data: availablePass } = await supabase
+      .from('passes')
+      .select('id, pass_type')
+      .eq('profile_id', profileId)
+      .eq('status', 'Available')
+      .limit(1)
+      .maybeSingle()
+      
+    if (availablePass) {
+      hasValidAccess = true
+      passIdToConsume = availablePass.id
+      planName = availablePass.pass_type
+    }
+  }
+
+  if (!hasValidAccess) {
+    await logCheckin(supabase, profileId, accessFlag)
     return NextResponse.json({
       status: 'denied',
       member: profile,
-      flag: 'No Active Pass',
-      plan: { name: plan.name },
-      message: `${plan.name} only covers the primary account holder. Upgrade to a Family plan to cover dependents.`
+      flag: accessFlag,
+      message: accessMessage
     })
   }
 
-  // 5. Check waiver
+  // 6. Check waiver (everyone needs a waiver, even day pass)
   const { data: waivers } = await supabase
     .from('waivers')
     .select('id')
@@ -146,7 +200,7 @@ export async function GET(
     .limit(1)
 
   if (!waivers || waivers.length === 0) {
-    await logCheckin(supabase, profileId, 'Waiver Expired')
+    await logCheckin(supabase, profileId, 'Waiver Expired', passIdToConsume)
     return NextResponse.json({
       status: 'denied',
       member: profile,
@@ -155,13 +209,21 @@ export async function GET(
     })
   }
 
-  // 6. All checks passed
-  await logCheckin(supabase, profileId, 'Success')
+  // 7. Consume Pass if applicable
+  if (passIdToConsume) {
+    await supabase
+      .from('passes')
+      .update({ status: 'Consumed' })
+      .eq('id', passIdToConsume)
+  }
+
+  // 8. All checks passed
+  await logCheckin(supabase, profileId, 'Success', passIdToConsume)
   return NextResponse.json({
     status: 'allowed',
     member: profile,
     flag: 'Success',
-    plan: { name: plan?.name },
+    plan: { name: planName },
     message: 'Welcome! Enjoy your workout.'
   })
 }

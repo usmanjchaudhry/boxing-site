@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { stripe } from '@/utils/stripe/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
+import { sendGymEmail } from '@/utils/email'
 
 // We need the service role key here because webhooks don't have a user session
 function getAdminClient() {
@@ -52,12 +53,37 @@ export async function POST(request: NextRequest) {
       case 'checkout.session.completed': {
         const session = event.data.object
         const householdId = session.metadata?.household_id
+        const profileId = session.metadata?.profile_id
         const planId = session.metadata?.plan_id
+        const productId = session.metadata?.product_id
         const stripeSubscriptionId = session.subscription
 
-        console.log('WEBHOOK DEBUG checkout.session.completed:', { householdId, planId, stripeSubscriptionId })
+        console.log('WEBHOOK DEBUG checkout.session.completed:', { householdId, planId, productId, stripeSubscriptionId })
 
-        if (householdId && planId && stripeSubscriptionId) {
+        if (session.mode === 'payment' && productId && profileId) {
+          // It's a Day Pass (or retail item)! Mint the pass for the user.
+          const { error } = await supabase.from('passes').insert({
+            profile_id: profileId,
+            pass_type: 'Day Pass',
+            status: 'Available'
+          })
+          if (error) {
+            console.error('Failed to mint pass:', error)
+          } else {
+            console.log('Successfully minted Day Pass for profile:', profileId)
+            const email = session.customer_details?.email
+            if (email) {
+              await sendGymEmail(
+                email,
+                'Your Day Pass Receipt',
+                `<h2 style="margin-top:0; color:#fff;">Day Pass Purchased!</h2>
+                 <p style="color:#aaa; line-height: 1.5;">Your payment of <strong>$${(session.amount_total! / 100).toFixed(2)}</strong> was successful.</p>
+                 <p style="color:#aaa; line-height: 1.5;">Your ticket is available on your dashboard. Simply click "Use Ticket" and show the QR code at the front desk to enter.</p>
+                 <a href="${process.env.NEXT_PUBLIC_SITE_URL}/dashboard" style="display:inline-block; background-color:#dc2626; color:#fff; padding:12px 24px; text-decoration:none; border-radius:8px; font-weight:bold; margin-top:20px; font-size:14px;">Go to Dashboard</a>`
+              )
+            }
+          }
+        } else if (householdId && planId && stripeSubscriptionId) {
           // Fetch the subscription from Stripe to get the current period
           const subResponse = await stripe.subscriptions.retrieve(stripeSubscriptionId as string)
           const sub = 'data' in subResponse ? (subResponse as any).data : subResponse
@@ -83,6 +109,17 @@ export async function POST(request: NextRequest) {
             console.error('Failed to upsert subscription:', error)
           } else {
             console.log('Subscription activated for household:', householdId)
+            const email = session.customer_details?.email
+            if (email) {
+              await sendGymEmail(
+                email,
+                'Welcome to La Familia Boxing!',
+                `<h2 style="margin-top:0; color:#fff;">Membership Activated</h2>
+                 <p style="color:#aaa; line-height: 1.5;">Your subscription payment of <strong>$${(session.amount_total! / 100).toFixed(2)}</strong> was successful. Welcome to the family!</p>
+                 <p style="color:#aaa; line-height: 1.5;">Your gym access QR codes are now active. Scan them at the front desk whenever you visit.</p>
+                 <a href="${process.env.NEXT_PUBLIC_SITE_URL}/dashboard" style="display:inline-block; background-color:#dc2626; color:#fff; padding:12px 24px; text-decoration:none; border-radius:8px; font-weight:bold; margin-top:20px; font-size:14px;">View QR Codes</a>`
+              )
+            }
           }
         }
         break
@@ -110,6 +147,20 @@ export async function POST(request: NextRequest) {
               .eq('household_id', householdId)
 
             console.log('Subscription renewed for household:', householdId)
+            
+            // Send receipt for recurring payments (skip first payment since checkout.session.completed handles it)
+            if (invoice.billing_reason === 'subscription_cycle') {
+              const email = invoice.customer_email
+              if (email) {
+                await sendGymEmail(
+                  email,
+                  'Membership Renewal Receipt',
+                  `<h2 style="margin-top:0; color:#fff;">Membership Renewed</h2>
+                   <p style="color:#aaa; line-height: 1.5;">Your monthly subscription payment of <strong>$${(invoice.amount_paid! / 100).toFixed(2)}</strong> was successful.</p>
+                   <p style="color:#aaa; line-height: 1.5;">Your gym access remains active. Keep up the hard work!</p>`
+                )
+              }
+            }
           }
         }
         break
@@ -143,7 +194,7 @@ export async function POST(request: NextRequest) {
           let status = 'Active'
           if (sub.status === 'canceled') status = 'Cancelled'
           else if (sub.status === 'past_due') status = 'Past_Due'
-          else if (sub.status === 'paused') status = 'Frozen'
+          else if (sub.pause_collection) status = 'Frozen'
 
           await supabase.from('subscriptions')
             .update({ status })

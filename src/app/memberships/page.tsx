@@ -4,6 +4,7 @@ import { createClient } from '@/utils/supabase/server'
 import { redirect } from 'next/navigation'
 import Navbar from '@/components/Navbar'
 import PlanCard from '@/components/PlanCard'
+import PassCard from '@/components/PassCard'
 
 export default async function MembershipsPage() {
   const supabase = await createClient()
@@ -49,6 +50,14 @@ export default async function MembershipsPage() {
     .eq('is_active', true)
     .order('price_cents', { ascending: true })
 
+  // Get active day passes
+  const { data: passes } = await supabase
+    .from('products')
+    .select('*')
+    .eq('is_active', true)
+    .in('category', ['DayPass'])
+    .order('price_cents', { ascending: true })
+
   return (
     <div className="min-h-screen bg-black text-white font-sans selection:bg-red-500 selection:text-white">
       <Navbar />
@@ -74,7 +83,7 @@ export default async function MembershipsPage() {
         )}
 
         {/* Plans Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-16">
           {(plans || []).map((plan) => (
             <PlanCard
               key={plan.id}
@@ -83,6 +92,22 @@ export default async function MembershipsPage() {
             />
           ))}
         </div>
+
+        {/* Passes Section */}
+        {passes && passes.length > 0 && (
+          <div className="border-t border-white/10 pt-16">
+            <div className="text-center mb-10">
+              <h2 className="text-2xl sm:text-4xl font-black mb-4">Single Passes</h2>
+              <p className="text-zinc-400 text-sm sm:text-lg">Just visiting? Grab a day pass and jump into the action.</p>
+            </div>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 justify-center">
+              {passes.map((pass) => (
+                <PassCard key={pass.id} pass={pass} />
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Fine Print */}
         <div className="mt-16 text-center text-zinc-600 text-xs space-y-1">

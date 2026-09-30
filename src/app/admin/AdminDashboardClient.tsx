@@ -1,8 +1,10 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Users, CreditCard, ScanLine, ShieldCheck, RefreshCw, Banknote, Loader2, Search } from 'lucide-react'
+import { Users, CreditCard, ScanLine, ShieldCheck, RefreshCw, Banknote, Loader2, Search, BarChart3 } from 'lucide-react'
 import CheckinScanner from '@/components/CheckinScanner'
+import ReportsTab from '@/components/ReportsTab'
+import { freezeSubscription, unfreezeSubscription, cancelSubscription } from './actions'
 
 interface Stats {
   totalMembers: number
@@ -32,6 +34,7 @@ interface Payment {
 
 interface Member {
   id: string
+  householdId: string | null
   name: string
   role: string
   householdRole: string
@@ -44,7 +47,7 @@ interface Member {
   hasAuth: boolean
 }
 
-type Tab = 'overview' | 'checkin' | 'payments' | 'members' | 'cash'
+type Tab = 'overview' | 'checkin' | 'payments' | 'members' | 'cash' | 'reports'
 
 interface Plan {
   id: string
@@ -71,6 +74,17 @@ export default function AdminDashboardClient({ role }: { role: string }) {
   const [cashMessage, setCashMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null)
   const [memberSearch, setMemberSearch] = useState('')
   const [showMemberDropdown, setShowMemberDropdown] = useState(false)
+  const [membersTabSearch, setMembersTabSearch] = useState('')
+  
+  // Freezing UI State
+  const [freezingMember, setFreezingMember] = useState<Member | null>(null)
+  const [freezeDateTime, setFreezeDateTime] = useState<string>('')
+  
+  // Canceling UI State
+  const [cancelingMember, setCancelingMember] = useState<Member | null>(null)
+  
+  // Unfreezing UI State
+  const [unfreezingMember, setUnfreezingMember] = useState<Member | null>(null)
 
   const handleRoleChange = async (memberId: string, newRole: string) => {
     setUpdatingRole(memberId)
@@ -156,6 +170,7 @@ export default function AdminDashboardClient({ role }: { role: string }) {
 
   const tabs: { id: Tab; label: string; icon: any; adminOnly?: boolean }[] = [
     { id: 'overview', label: 'Overview', icon: ShieldCheck },
+    { id: 'reports', label: 'Reports', icon: BarChart3, adminOnly: true },
     { id: 'checkin', label: 'Check-in Scanner', icon: ScanLine },
     { id: 'cash', label: 'Cash Payments', icon: Banknote, adminOnly: true },
     { id: 'payments', label: 'Stripe Payments', icon: CreditCard, adminOnly: true },
@@ -349,9 +364,21 @@ export default function AdminDashboardClient({ role }: { role: string }) {
       {/* MEMBERS TAB */}
       {activeTab === 'members' && (
         <div className="rounded-2xl bg-zinc-950 border border-white/5 overflow-hidden">
-          <div className="p-4 sm:p-6 border-b border-white/5">
-            <h3 className="text-lg font-bold">All Members</h3>
-            <p className="text-xs text-zinc-500 mt-1">{members.length} members found</p>
+          <div className="p-4 sm:p-6 border-b border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h3 className="text-lg font-bold">All Members</h3>
+              <p className="text-xs text-zinc-500 mt-1">{members.length} total members</p>
+            </div>
+            <div className="relative w-full sm:w-64">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 pointer-events-none" />
+              <input
+                type="text"
+                placeholder="Search by name..."
+                value={membersTabSearch}
+                onChange={(e) => setMembersTabSearch(e.target.value)}
+                className="w-full bg-black/50 border border-white/10 rounded-xl pl-10 pr-4 py-2 text-sm text-white focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none"
+              />
+            </div>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -362,10 +389,13 @@ export default function AdminDashboardClient({ role }: { role: string }) {
                   <th className="text-left px-4 sm:px-6 py-3 font-semibold hidden sm:table-cell">Plan</th>
                   <th className="text-left px-4 sm:px-6 py-3 font-semibold">Subscription</th>
                   <th className="text-left px-4 sm:px-6 py-3 font-semibold hidden sm:table-cell">Waiver</th>
+                  <th className="text-left px-4 sm:px-6 py-3 font-semibold">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {members.map(m => (
+                {members
+                  .filter(m => m.name.toLowerCase().includes(membersTabSearch.toLowerCase()))
+                  .map(m => (
                   <tr key={m.id} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
                     <td className="px-4 sm:px-6 py-3">
                       {m.stripeCustomerId ? (
@@ -429,6 +459,40 @@ export default function AdminDashboardClient({ role }: { role: string }) {
                         ? <span className="text-green-400 text-xs font-bold">✓ Signed</span>
                         : <span className="text-red-400 text-xs font-bold">✗ Missing</span>
                       }
+                    </td>
+                    <td className="px-4 sm:px-6 py-3">
+                      {m.householdRole === 'Primary' && m.subscriptionStatus !== 'None' && m.householdId && (
+                        <div className="flex items-center gap-2">
+                          {m.subscriptionStatus === 'Active' && (
+                            <>
+                              <button 
+                                onClick={() => {
+                                  setFreezingMember(m)
+                                  setFreezeDateTime('')
+                                }}
+                                className="px-2 py-1 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded"
+                              >
+                                Freeze
+                              </button>
+                              <button 
+                                onClick={() => setCancelingMember(m)}
+                                className="px-2 py-1 bg-red-600 hover:bg-red-500 text-white text-xs font-bold rounded"
+                              >
+                                Cancel
+                              </button>
+                            </>
+                          )}
+
+                          {m.subscriptionStatus === 'Frozen' && (
+                            <button 
+                              onClick={() => setUnfreezingMember(m)}
+                              className="px-2 py-1 bg-green-600 hover:bg-green-500 text-white text-xs font-bold rounded"
+                            >
+                              Unfreeze
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -649,6 +713,145 @@ export default function AdminDashboardClient({ role }: { role: string }) {
                   )}
                 </tbody>
               </table>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* REPORTS TAB */}
+      {activeTab === 'reports' && (
+        <ReportsTab />
+      )}
+
+      {/* Freeze Modal */}
+      {freezingMember && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-zinc-950 border border-white/10 rounded-2xl w-full max-w-md p-6 shadow-2xl relative">
+            <button 
+              onClick={() => setFreezingMember(null)}
+              className="absolute top-4 right-4 text-zinc-500 hover:text-white transition-colors"
+            >
+              ✕
+            </button>
+            <h3 className="text-xl font-black text-white mb-2">Freeze Subscription</h3>
+            <p className="text-sm text-zinc-400 mb-6">
+              You are freezing the billing cycle for <span className="font-bold text-white">{freezingMember.name}</span>. Their QR code will instantly stop working.
+            </p>
+
+            <div className="space-y-6">
+              {/* Option 1: Specific Date/Time */}
+              <div className="p-4 bg-white/5 rounded-xl border border-white/5">
+                <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">
+                  1. Automatic Resume (Date & Time)
+                </label>
+                <p className="text-xs text-zinc-500 mb-3">Stripe will automatically unfreeze and charge them at this exact moment.</p>
+                <div className="flex flex-col gap-3">
+                  <input 
+                    type="datetime-local" 
+                    min={new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0,16)}
+                    value={freezeDateTime}
+                    onChange={(e) => setFreezeDateTime(e.target.value)}
+                    className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                  />
+                  <button 
+                    disabled={!freezeDateTime}
+                    onClick={async () => {
+                      if (!freezeDateTime) return
+                      await freezeSubscription(freezingMember.householdId!, freezeDateTime)
+                      setFreezingMember(null)
+                      fetchMembers()
+                    }}
+                    className="w-full py-3 bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-800 disabled:text-zinc-500 text-white text-sm font-bold rounded-xl transition-colors"
+                  >
+                    Freeze Until Selected Time
+                  </button>
+                </div>
+              </div>
+
+              {/* Option 2: Indefinitely */}
+              <div className="p-4 bg-white/5 rounded-xl border border-white/5">
+                <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">
+                  2. Manual Resume (Indefinitely)
+                </label>
+                <p className="text-xs text-zinc-500 mb-3">They will be frozen forever until you manually click Unfreeze on this dashboard.</p>
+                <button 
+                  onClick={async () => {
+                    await freezeSubscription(freezingMember.householdId!, null)
+                    setFreezingMember(null)
+                    fetchMembers()
+                  }}
+                  className="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-white text-sm font-bold rounded-xl transition-colors border border-white/5"
+                >
+                  Freeze Indefinitely
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cancel Modal */}
+      {cancelingMember && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-zinc-950 border border-white/10 rounded-2xl w-full max-w-sm p-6 shadow-2xl relative text-center">
+            <div className="w-12 h-12 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
+              <ShieldCheck className="w-6 h-6" />
+            </div>
+            <h3 className="text-xl font-black text-white mb-2">Cancel Subscription?</h3>
+            <p className="text-sm text-zinc-400 mb-8">
+              Are you sure you want to permanently cancel the subscription for <span className="font-bold text-white">{cancelingMember.name}</span>? They will immediately lose gym access.
+            </p>
+
+            <div className="flex flex-col gap-3">
+              <button 
+                onClick={async () => {
+                  await cancelSubscription(cancelingMember.householdId!)
+                  setCancelingMember(null)
+                  fetchMembers()
+                }}
+                className="w-full py-3 bg-red-600 hover:bg-red-500 text-white text-sm font-bold rounded-xl transition-colors"
+              >
+                Yes, Cancel it
+              </button>
+              <button 
+                onClick={() => setCancelingMember(null)}
+                className="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-white text-sm font-bold rounded-xl transition-colors border border-white/5"
+              >
+                Nevermind, keep it
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Unfreeze Modal */}
+      {unfreezingMember && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-zinc-950 border border-white/10 rounded-2xl w-full max-w-sm p-6 shadow-2xl relative text-center">
+            <div className="w-12 h-12 bg-green-500/10 text-green-500 rounded-full flex items-center justify-center mx-auto mb-4">
+              <RefreshCw className="w-6 h-6" />
+            </div>
+            <h3 className="text-xl font-black text-white mb-2">Unfreeze Account?</h3>
+            <p className="text-sm text-zinc-400 mb-8">
+              Are you sure you want to unfreeze the subscription for <span className="font-bold text-white">{unfreezingMember.name}</span>? Their billing will resume and they will regain gym access immediately.
+            </p>
+
+            <div className="flex flex-col gap-3">
+              <button 
+                onClick={async () => {
+                  await unfreezeSubscription(unfreezingMember.householdId!)
+                  setUnfreezingMember(null)
+                  fetchMembers()
+                }}
+                className="w-full py-3 bg-green-600 hover:bg-green-500 text-white text-sm font-bold rounded-xl transition-colors"
+              >
+                Yes, Unfreeze Now
+              </button>
+              <button 
+                onClick={() => setUnfreezingMember(null)}
+                className="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-white text-sm font-bold rounded-xl transition-colors border border-white/5"
+              >
+                Cancel
+              </button>
             </div>
           </div>
         </div>
