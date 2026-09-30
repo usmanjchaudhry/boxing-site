@@ -8,6 +8,7 @@ import { signWaiver } from './actions'
 import Navbar from '@/components/Navbar'
 import AddDependentForm from '@/components/AddDependentForm'
 import MemberQRCode from '@/components/MemberQRCode'
+import TicketCard from '@/components/TicketCard'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -71,6 +72,36 @@ export default async function DashboardPage() {
         subscription = sub
       }
       planName = (sub.membership_plans as any)?.name || null
+    }
+  }
+
+  // 3.5 Fetch All Passes (Available & Past)
+  let availablePasses: any[] = []
+  let pastPasses: any[] = []
+  if (householdMembers.length > 0) {
+    const profileIds = householdMembers.map(m => m.profile?.id).filter(Boolean)
+    if (profileIds.length > 0) {
+      const { data: passes } = await supabase
+        .from('passes')
+        .select('id, pass_type, status, created_at, updated_at, profile_id')
+        .in('profile_id', profileIds)
+        .order('created_at', { ascending: false })
+        
+      // Map the profile name back for display
+      if (passes) {
+        const mappedPasses = passes.map(p => {
+          const owner = householdMembers.find(m => m.profile?.id === p.profile_id)?.profile
+          return {
+            ...p,
+            owner_name: owner ? `${owner.first_name} ${owner.last_name}` : 'Unknown'
+          }
+        })
+        
+        availablePasses = mappedPasses.filter(p => p.status === 'Available')
+        pastPasses = mappedPasses.filter(p => p.status !== 'Available')
+      }
+        
+
     }
   }
 
@@ -214,6 +245,46 @@ export default async function DashboardPage() {
               View Schedule
             </Link>
           </div>
+
+          {/* Passes Cards (If any exist) */}
+          {(availablePasses.length > 0 || pastPasses.length > 0) && (
+            <div className="p-6 rounded-3xl bg-zinc-950 border border-white/5 flex flex-col md:col-span-2">
+              {availablePasses.length > 0 && (
+                <div className="mb-8">
+                  <h3 className="text-lg font-semibold mb-4 text-zinc-300">Available Tickets</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {availablePasses.map(pass => (
+                      <TicketCard key={pass.id} pass={pass} />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {pastPasses.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-semibold mb-3 text-zinc-500">Ticket History</h3>
+                  <div className="space-y-2">
+                    {pastPasses.map(pass => (
+                      <div key={pass.id} className="bg-black border border-white/5 p-3 rounded-lg flex items-center justify-between opacity-70">
+                        <div>
+                          <p className="font-semibold text-zinc-300 text-sm">{pass.pass_type} <span className="text-zinc-500 font-normal">({pass.owner_name})</span></p>
+                          <p className="text-[10px] text-zinc-500 mt-0.5">Bought: {new Date(pass.created_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</p>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-[10px] font-bold px-2 py-1 bg-zinc-800 text-zinc-400 rounded uppercase tracking-wider inline-block mb-1">
+                            {pass.status}
+                          </div>
+                          <p className="text-[10px] text-zinc-500">
+                            {pass.status === 'Consumed' ? `Used: ${new Date(pass.updated_at || pass.created_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}` : ''}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Household Management */}
           <div className="p-6 rounded-3xl bg-zinc-950 border border-white/5 row-span-2">

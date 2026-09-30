@@ -65,15 +65,16 @@ export async function GET(request: NextRequest) {
   // Get all subscriptions with plan names + stripe subscription ID
   const { data: subs } = await db
     .from('subscriptions')
-    .select('household_id, status, stripe_subscription_id, membership_plans(name)')
+    .select('household_id, status, stripe_subscription_id, membership_plans(name, max_dependents)')
 
-  const subMap: Record<string, { status: string; planName: string; stripeSubId: string | null }> = {}
+  const subMap: Record<string, { status: string; planName: string; stripeSubId: string | null; maxDependents: number }> = {}
   for (const s of subs || []) {
     const plan = s.membership_plans as any
     subMap[s.household_id] = {
       status: s.status,
       planName: plan?.name || 'Unknown',
-      stripeSubId: s.stripe_subscription_id
+      stripeSubId: s.stripe_subscription_id,
+      maxDependents: plan?.max_dependents ?? 0
     }
   }
 
@@ -111,13 +112,23 @@ export async function GET(request: NextRequest) {
     const stripeCustomerId = householdId ? householdStripeMap[householdId] : null
     const primaryName = householdId && hm?.role === 'Dependent' ? householdPrimaryMap[householdId] : null
 
+    let subscriptionStatus = sub?.status || 'None'
+    let planName = sub?.planName || 'No plan'
+    
+    // Check if dependent is allowed on this plan
+    if (sub && sub.maxDependents === 0 && hm?.role !== 'Primary') {
+      subscriptionStatus = 'None'
+      planName = 'Not Covered (Indiv. Plan)'
+    }
+
     return {
       id: p.id,
+      householdId,
       name: `${p.first_name} ${p.last_name}`,
       role: p.role,
       householdRole: hm?.role || 'N/A',
-      subscriptionStatus: sub?.status || 'None',
-      planName: sub?.planName || 'No plan',
+      subscriptionStatus,
+      planName,
       hasWaiver: !!waiverMap[p.id],
       joinedAt: p.created_at,
       stripeCustomerId,
