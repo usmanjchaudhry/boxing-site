@@ -1,7 +1,7 @@
 import { Resend } from 'resend'
 
 // Initialize Resend with the API key from environment variables
-const resend = new Resend(process.env.RESEND_API_KEY)
+const resend = new Resend(process.env.RESEND_API_KEY || 're_dummy')
 
 // 'onboarding@resend.dev' is a sandbox domain that lets you test emails to yourself.
 // Once you register a domain, you can change this to 'hello@lafamiliaboxing.com'
