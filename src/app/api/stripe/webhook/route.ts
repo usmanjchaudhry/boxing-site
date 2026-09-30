@@ -86,7 +86,7 @@ export async function POST(request: NextRequest) {
         } else if (householdId && planId && stripeSubscriptionId) {
           // Fetch the subscription from Stripe to get the current period
           const subResponse = await stripe.subscriptions.retrieve(stripeSubscriptionId as string)
-          const sub = 'data' in subResponse ? (subResponse as any).data : subResponse
+          const sub = ('data' in subResponse ? (subResponse as any).data : subResponse) as any
 
           const startDate = toDateString(sub.current_period_start) || new Date().toISOString().split('T')[0]
           const endDate = toDateString(sub.current_period_end)
@@ -131,7 +131,7 @@ export async function POST(request: NextRequest) {
 
         if (stripeSubId) {
           const subResponse = await stripe.subscriptions.retrieve(stripeSubId as string)
-          const sub = 'data' in subResponse ? (subResponse as any).data : subResponse
+          const sub = ('data' in subResponse ? (subResponse as any).data : subResponse) as any
           const householdId = sub.metadata?.household_id
 
           if (householdId) {
@@ -172,7 +172,7 @@ export async function POST(request: NextRequest) {
 
         if (stripeSubId) {
           const subResponse = await stripe.subscriptions.retrieve(stripeSubId as string)
-          const sub = 'data' in subResponse ? (subResponse as any).data : subResponse
+          const sub = ('data' in subResponse ? (subResponse as any).data : subResponse) as any
           const householdId = sub.metadata?.household_id
 
           if (householdId) {

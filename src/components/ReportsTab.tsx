@@ -243,7 +243,7 @@ export default function ReportsTab() {
                   paddingAngle={4}
                   dataKey="count"
                   nameKey="status"
-                  label={({ status, count }) => `${status}: ${count}`}
+                  label={({ status, count }: any) => `${status}: ${count}`}
                   labelLine={false}
                 >
                   {data.subscriptionStatus.map((entry, i) => (
@@ -274,7 +274,7 @@ export default function ReportsTab() {
                   paddingAngle={4}
                   dataKey="count"
                   nameKey="plan"
-                  label={({ plan, count }) => `${plan}: ${count}`}
+                  label={({ plan, count }: any) => `${plan}: ${count}`}
                   labelLine={false}
                 >
                   {data.planDistribution.map((_, i) => (
