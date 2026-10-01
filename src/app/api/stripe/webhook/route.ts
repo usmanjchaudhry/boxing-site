@@ -188,7 +188,17 @@ export async function POST(request: NextRequest) {
 
       case 'customer.subscription.updated': {
         const sub = event.data.object
-        const householdId = sub.metadata?.household_id
+        let householdId = sub.metadata?.household_id
+
+        // Fallback: look up by stripe_subscription_id if metadata is missing
+        if (!householdId) {
+          const { data: localSub } = await supabase
+            .from('subscriptions')
+            .select('household_id')
+            .eq('stripe_subscription_id', sub.id)
+            .single()
+          householdId = localSub?.household_id
+        }
 
         if (householdId) {
           let status = 'Active'
@@ -207,7 +217,17 @@ export async function POST(request: NextRequest) {
 
       case 'customer.subscription.deleted': {
         const sub = event.data.object
-        const householdId = sub.metadata?.household_id
+        let householdId = sub.metadata?.household_id
+
+        // Fallback: look up by stripe_subscription_id if metadata is missing
+        if (!householdId) {
+          const { data: localSub } = await supabase
+            .from('subscriptions')
+            .select('household_id')
+            .eq('stripe_subscription_id', sub.id)
+            .single()
+          householdId = localSub?.household_id
+        }
 
         if (householdId) {
           await supabase.from('subscriptions')
