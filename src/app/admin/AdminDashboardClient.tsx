@@ -76,6 +76,11 @@ export default function AdminDashboardClient({ role }: { role: string }) {
   const [showMemberDropdown, setShowMemberDropdown] = useState(false)
   const [membersTabSearch, setMembersTabSearch] = useState('')
   
+  // Per-tab loading flags (true until first fetch completes)
+  const [paymentsLoading, setPaymentsLoading] = useState(true)
+  const [membersLoading, setMembersLoading] = useState(true)
+  const [cashLoading, setCashLoading] = useState(true)
+  
   // Freezing UI State
   const [freezingMember, setFreezingMember] = useState<Member | null>(null)
   const [freezeDateTime, setFreezeDateTime] = useState<string>('')
@@ -126,6 +131,8 @@ export default function AdminDashboardClient({ role }: { role: string }) {
       if (data.payments) setPayments(data.payments)
     } catch (err) {
       console.error('Failed to fetch payments:', err)
+    } finally {
+      setPaymentsLoading(false)
     }
   }, [])
 
@@ -136,6 +143,8 @@ export default function AdminDashboardClient({ role }: { role: string }) {
       if (data.members) setMembers(data.members)
     } catch (err) {
       console.error('Failed to fetch members:', err)
+    } finally {
+      setMembersLoading(false)
     }
   }, [])
 
@@ -162,8 +171,8 @@ export default function AdminDashboardClient({ role }: { role: string }) {
     if (activeTab === 'payments' && payments.length === 0) fetchPayments()
     if (activeTab === 'members' && members.length === 0) fetchMembers()
     if (activeTab === 'cash' && plans.length === 0) {
-      fetch('/api/admin/members').then(r => r.json()).then(d => { if (d.members) setMembers(d.members) })
-      fetch('/api/stripe/plans').then(r => r.json()).then(d => { if (d.plans) setPlans(d.plans) }).catch(() => {})
+      fetch('/api/admin/members').then(r => r.json()).then(d => { if (d.members) setMembers(d.members) }).finally(() => setMembersLoading(false))
+      fetch('/api/stripe/plans').then(r => r.json()).then(d => { if (d.plans) setPlans(d.plans) }).catch(() => {}).finally(() => setCashLoading(false))
       fetch('/api/admin/cash-payment').then(r => r.json()).then(d => { if (d.payments) setCashHistory(d.payments) }).catch(() => {})
     }
   }, [activeTab, payments.length, members.length, plans.length, fetchPayments, fetchMembers])
@@ -320,7 +329,14 @@ export default function AdminDashboardClient({ role }: { role: string }) {
                 </tr>
               </thead>
               <tbody>
-                {payments.length === 0 ? (
+                {paymentsLoading ? (
+                  <tr><td colSpan={5} className="px-6 py-16 text-center">
+                    <div className="flex flex-col items-center gap-3">
+                      <Loader2 className="w-6 h-6 animate-spin text-red-500" />
+                      <span className="text-sm text-zinc-500">Loading payments...</span>
+                    </div>
+                  </td></tr>
+                ) : payments.length === 0 ? (
                   <tr><td colSpan={5} className="px-6 py-8 text-center text-zinc-600">No payments found</td></tr>
                 ) : (
                   payments.map(p => (
@@ -367,7 +383,7 @@ export default function AdminDashboardClient({ role }: { role: string }) {
           <div className="p-4 sm:p-6 border-b border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <h3 className="text-lg font-bold">All Members</h3>
-              <p className="text-xs text-zinc-500 mt-1">{members.length} total members</p>
+              <p className="text-xs text-zinc-500 mt-1">{membersLoading ? 'Loading...' : `${members.length} total members`}</p>
             </div>
             <div className="relative w-full sm:w-64">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 pointer-events-none" />
@@ -393,7 +409,14 @@ export default function AdminDashboardClient({ role }: { role: string }) {
                 </tr>
               </thead>
               <tbody>
-                {members
+                {membersLoading ? (
+                  <tr><td colSpan={6} className="px-6 py-16 text-center">
+                    <div className="flex flex-col items-center gap-3">
+                      <Loader2 className="w-6 h-6 animate-spin text-red-500" />
+                      <span className="text-sm text-zinc-500">Loading members...</span>
+                    </div>
+                  </td></tr>
+                ) : members
                   .filter(m => m.name.toLowerCase().includes(membersTabSearch.toLowerCase()))
                   .map(m => (
                   <tr key={m.id} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
@@ -505,6 +528,15 @@ export default function AdminDashboardClient({ role }: { role: string }) {
       {/* CASH PAYMENTS TAB */}
       {activeTab === 'cash' && (
         <div className="space-y-6">
+          {cashLoading ? (
+            <div className="rounded-2xl bg-zinc-950 border border-white/5 p-4 sm:p-6">
+              <div className="flex flex-col items-center gap-3 py-12">
+                <Loader2 className="w-6 h-6 animate-spin text-red-500" />
+                <span className="text-sm text-zinc-500">Loading cash payments...</span>
+              </div>
+            </div>
+          ) : (
+          <>
           {/* Record Payment Form */}
           <div className="rounded-2xl bg-zinc-950 border border-white/5 p-4 sm:p-6">
             <h3 className="text-lg font-bold mb-1">Record Cash Payment</h3>
@@ -715,6 +747,8 @@ export default function AdminDashboardClient({ role }: { role: string }) {
               </table>
             </div>
           </div>
+          </>
+          )}
         </div>
       )}
       {/* REPORTS TAB */}
