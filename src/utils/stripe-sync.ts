@@ -26,8 +26,10 @@ export async function syncSubscriptionWithStripe(
   }
 
   try {
-    const stripeSubResponse = await stripe.subscriptions.retrieve(sub.stripe_subscription_id)
-    const stripeSub = ('data' in stripeSubResponse ? (stripeSubResponse as any).data : stripeSubResponse) as any
+    // Retrieve the subscription directly from Stripe
+    const stripeSub = await stripe.subscriptions.retrieve(sub.stripe_subscription_id) as any
+
+    console.log(`Stripe sync: Retrieved sub ${sub.stripe_subscription_id}, stripe status: ${stripeSub.status}, db status: ${sub.status}`)
 
     let correctStatus = 'Active'
     if (stripeSub.status === 'canceled') correctStatus = 'Cancelled'
@@ -43,26 +45,29 @@ export async function syncSubscriptionWithStripe(
         .single()
 
       if (household?.stripe_customer_id) {
-        const activeSubs = await stripe.subscriptions.list({
+        const activeSubsResponse = await stripe.subscriptions.list({
           customer: household.stripe_customer_id,
           status: 'active',
           limit: 1,
         })
 
-        const activeSubsList = ('data' in activeSubs ? (activeSubs as any).data : [activeSubs]) as any[]
+        // stripe.subscriptions.list returns { data: [...] }
+        const activeSubsList = activeSubsResponse?.data || []
+
+        console.log(`Stripe sync: Found ${activeSubsList.length} active subs for customer ${household.stripe_customer_id}`)
 
         if (activeSubsList.length > 0) {
           const newSub = activeSubsList[0]
           const newPlanId = newSub.metadata?.plan_id || sub.plan_id
 
-          console.log(`Stripe sync: Found newer active sub ${newSub.id} for household ${householdId}`)
+          console.log(`Stripe sync: Updating to newer active sub ${newSub.id}`)
           await supabase
             .from('subscriptions')
             .update({
               status: 'Active',
               stripe_subscription_id: newSub.id,
               plan_id: newPlanId,
-              start_date: new Date(newSub.current_period_start * 1000).toISOString().split('T')[0],
+              start_date: new Date((newSub as any).current_period_start * 1000).toISOString().split('T')[0],
             })
             .eq('household_id', householdId)
 
@@ -73,7 +78,7 @@ export async function syncSubscriptionWithStripe(
 
     // Sync the status if it differs
     if (sub.status !== correctStatus) {
-      console.log(`Stripe sync: ${sub.status} -> ${correctStatus} for household ${householdId}`)
+      console.log(`Stripe sync: Updating DB ${sub.status} -> ${correctStatus} for household ${householdId}`)
       await supabase
         .from('subscriptions')
         .update({ status: correctStatus })
@@ -83,6 +88,7 @@ export async function syncSubscriptionWithStripe(
     return { status: correctStatus, plan_id: sub.plan_id, stripe_subscription_id: sub.stripe_subscription_id }
 
   } catch (err: any) {
+    console.error('Stripe sync error:', err?.type, err?.statusCode, err?.message)
     // If Stripe sub is deleted (404), mark as cancelled
     if (err?.statusCode === 404 || err?.type === 'StripeInvalidRequestError') {
       if (sub.status !== 'Cancelled') {
@@ -94,7 +100,6 @@ export async function syncSubscriptionWithStripe(
       return { status: 'Cancelled', plan_id: sub.plan_id, stripe_subscription_id: sub.stripe_subscription_id }
     }
     // Non-Stripe error — return DB value
-    console.error('Stripe sync error:', err.message)
     return { status: sub.status, plan_id: sub.plan_id, stripe_subscription_id: sub.stripe_subscription_id }
   }
 }

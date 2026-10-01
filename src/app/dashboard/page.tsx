@@ -70,19 +70,24 @@ export default async function DashboardPage() {
         subscription = { ...sub, status: 'Cancelled' }
       } else if (sub.stripe_subscription_id && sub.payment_method === 'stripe') {
         // Enterprise Stripe sync — verify against Stripe, detect re-subscribes
-        const { syncSubscriptionWithStripe } = await import('@/utils/stripe-sync')
-        const synced = await syncSubscriptionWithStripe(supabase, sub, householdId)
+        try {
+          const { syncSubscriptionWithStripe } = await import('@/utils/stripe-sync')
+          const synced = await syncSubscriptionWithStripe(supabase, sub, householdId)
 
-        if (synced.status !== sub.status || synced.plan_id !== sub.plan_id) {
-          // Re-fetch to get updated plan name
-          const { data: refreshedSub } = await supabase
-            .from('subscriptions')
-            .select('status, end_date, plan_id, payment_method, stripe_subscription_id, membership_plans(name)')
-            .eq('household_id', householdId)
-            .single()
-          subscription = refreshedSub || { ...sub, status: synced.status }
-          planName = (refreshedSub?.membership_plans as any)?.name || null
-        } else {
+          if (synced.status !== sub.status || synced.plan_id !== sub.plan_id) {
+            // Re-fetch to get updated plan name
+            const { data: refreshedSub } = await supabase
+              .from('subscriptions')
+              .select('status, end_date, plan_id, payment_method, stripe_subscription_id, membership_plans(name)')
+              .eq('household_id', householdId)
+              .single()
+            subscription = refreshedSub || { ...sub, status: synced.status }
+            planName = (refreshedSub?.membership_plans as any)?.name || null
+          } else {
+            subscription = sub
+          }
+        } catch (syncErr: any) {
+          console.error('Dashboard sync failed, using DB value:', syncErr.message)
           subscription = sub
         }
       } else {
