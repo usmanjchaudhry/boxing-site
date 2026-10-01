@@ -53,7 +53,7 @@ export default async function DashboardPage() {
   if (householdId) {
     const { data: sub } = await supabase
       .from('subscriptions')
-      .select('status, end_date, plan_id, payment_method, membership_plans(name)')
+      .select('status, end_date, plan_id, payment_method, stripe_subscription_id, membership_plans(name)')
       .eq('household_id', householdId)
       .limit(1)
       .maybeSingle()
@@ -68,6 +68,49 @@ export default async function DashboardPage() {
           .eq('status', 'Active')
         
         subscription = { ...sub, status: 'Cancelled' }
+      } else if (sub.stripe_subscription_id && sub.payment_method === 'stripe') {
+        // ENTERPRISE SYNC: Verify against Stripe on every dashboard load
+        // This catches missed webhooks, manual Stripe changes, etc.
+        try {
+          const { stripe } = await import('@/utils/stripe/server')
+          const stripeSubResponse = await stripe.subscriptions.retrieve(sub.stripe_subscription_id)
+          const stripeSub = ('data' in stripeSubResponse ? (stripeSubResponse as any).data : stripeSubResponse) as any
+
+          let correctStatus = 'Active'
+          if (stripeSub.status === 'canceled') correctStatus = 'Cancelled'
+          else if (stripeSub.status === 'past_due') correctStatus = 'Past_Due'
+          else if (stripeSub.pause_collection) correctStatus = 'Frozen'
+
+          // If local DB is out of sync with Stripe, fix it
+          if (sub.status !== correctStatus) {
+            console.log(`Dashboard sync: ${sub.status} -> ${correctStatus} for household ${householdId}`)
+            await supabase
+              .from('subscriptions')
+              .update({ status: correctStatus })
+              .eq('household_id', householdId)
+            
+            subscription = { ...sub, status: correctStatus }
+          } else {
+            subscription = sub
+          }
+        } catch (err: any) {
+          // If Stripe sub is deleted (404), mark as cancelled
+          if (err?.statusCode === 404 || err?.type === 'StripeInvalidRequestError') {
+            if (sub.status !== 'Cancelled') {
+              await supabase
+                .from('subscriptions')
+                .update({ status: 'Cancelled' })
+                .eq('household_id', householdId)
+              subscription = { ...sub, status: 'Cancelled' }
+            } else {
+              subscription = sub
+            }
+          } else {
+            // Non-Stripe error, just use DB value
+            console.error('Stripe sync error:', err.message)
+            subscription = sub
+          }
+        }
       } else {
         subscription = sub
       }
