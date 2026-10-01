@@ -69,104 +69,21 @@ export default async function DashboardPage() {
         
         subscription = { ...sub, status: 'Cancelled' }
       } else if (sub.stripe_subscription_id && sub.payment_method === 'stripe') {
-        // ENTERPRISE SYNC: Verify against Stripe on every dashboard load
-        // This catches missed webhooks, manual Stripe changes, re-subscribes, etc.
-        try {
-          const { stripe } = await import('@/utils/stripe/server')
-          const stripeSubResponse = await stripe.subscriptions.retrieve(sub.stripe_subscription_id)
-          const stripeSub = ('data' in stripeSubResponse ? (stripeSubResponse as any).data : stripeSubResponse) as any
+        // Enterprise Stripe sync — verify against Stripe, detect re-subscribes
+        const { syncSubscriptionWithStripe } = await import('@/utils/stripe-sync')
+        const synced = await syncSubscriptionWithStripe(supabase, sub, householdId)
 
-          let correctStatus = 'Active'
-          if (stripeSub.status === 'canceled') correctStatus = 'Cancelled'
-          else if (stripeSub.status === 'past_due') correctStatus = 'Past_Due'
-          else if (stripeSub.pause_collection) correctStatus = 'Frozen'
-
-          // If the stored subscription is cancelled, check if the customer has a NEW active one
-          if (correctStatus === 'Cancelled') {
-            // Look up the household's Stripe customer ID
-            const { data: household } = await supabase
-              .from('households')
-              .select('stripe_customer_id')
-              .eq('id', householdId)
-              .single()
-
-            if (household?.stripe_customer_id) {
-              // Check Stripe for any active subscriptions for this customer
-              const activeSubs = await stripe.subscriptions.list({
-                customer: household.stripe_customer_id,
-                status: 'active',
-                limit: 1,
-              })
-
-              const activeSubsList = ('data' in activeSubs ? (activeSubs as any).data : [activeSubs]) as any[]
-
-              if (activeSubsList.length > 0) {
-                const newSub = activeSubsList[0]
-                const newPlanId = newSub.metadata?.plan_id || sub.plan_id
-
-                // Found a newer active subscription — update the DB!
-                console.log(`Dashboard sync: Found newer active sub ${newSub.id} for household ${householdId}`)
-                await supabase
-                  .from('subscriptions')
-                  .update({
-                    status: 'Active',
-                    stripe_subscription_id: newSub.id,
-                    plan_id: newPlanId,
-                    start_date: new Date(newSub.current_period_start * 1000).toISOString().split('T')[0],
-                  })
-                  .eq('household_id', householdId)
-
-                // Re-fetch to get the plan name
-                const { data: refreshedSub } = await supabase
-                  .from('subscriptions')
-                  .select('status, end_date, plan_id, payment_method, stripe_subscription_id, membership_plans(name)')
-                  .eq('household_id', householdId)
-                  .single()
-                
-                subscription = refreshedSub || { ...sub, status: 'Active' }
-                planName = (refreshedSub?.membership_plans as any)?.name || planName
-                correctStatus = 'Active' // Skip the update below
-              }
-            }
-          }
-
-          // If local DB is out of sync with Stripe, fix it
-          if (sub.status !== correctStatus && correctStatus !== 'Active') {
-            console.log(`Dashboard sync: ${sub.status} -> ${correctStatus} for household ${householdId}`)
-            await supabase
-              .from('subscriptions')
-              .update({ status: correctStatus })
-              .eq('household_id', householdId)
-            
-            subscription = { ...sub, status: correctStatus }
-          } else if (!subscription) {
-            if (sub.status !== correctStatus) {
-              await supabase
-                .from('subscriptions')
-                .update({ status: correctStatus })
-                .eq('household_id', householdId)
-              subscription = { ...sub, status: correctStatus }
-            } else {
-              subscription = sub
-            }
-          }
-        } catch (err: any) {
-          // If Stripe sub is deleted (404), mark as cancelled
-          if (err?.statusCode === 404 || err?.type === 'StripeInvalidRequestError') {
-            if (sub.status !== 'Cancelled') {
-              await supabase
-                .from('subscriptions')
-                .update({ status: 'Cancelled' })
-                .eq('household_id', householdId)
-              subscription = { ...sub, status: 'Cancelled' }
-            } else {
-              subscription = sub
-            }
-          } else {
-            // Non-Stripe error, just use DB value
-            console.error('Stripe sync error:', err.message)
-            subscription = sub
-          }
+        if (synced.status !== sub.status || synced.plan_id !== sub.plan_id) {
+          // Re-fetch to get updated plan name
+          const { data: refreshedSub } = await supabase
+            .from('subscriptions')
+            .select('status, end_date, plan_id, payment_method, stripe_subscription_id, membership_plans(name)')
+            .eq('household_id', householdId)
+            .single()
+          subscription = refreshedSub || { ...sub, status: synced.status }
+          planName = (refreshedSub?.membership_plans as any)?.name || null
+        } else {
+          subscription = sub
         }
       } else {
         subscription = sub

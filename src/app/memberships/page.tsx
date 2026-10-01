@@ -6,6 +6,8 @@ import Navbar from '@/components/Navbar'
 import PlanCard from '@/components/PlanCard'
 import PassCard from '@/components/PassCard'
 
+import { syncSubscriptionWithStripe } from '@/utils/stripe-sync'
+
 export default async function MembershipsPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -31,14 +33,19 @@ export default async function MembershipsPage() {
     if (hm) {
       const { data: sub } = await supabase
         .from('subscriptions')
-        .select('plan_id, status')
+        .select('plan_id, status, stripe_subscription_id, payment_method')
         .eq('household_id', hm.household_id)
         .limit(1)
         .maybeSingle()
 
-      if (sub && sub.status === 'Active') {
-        currentPlanId = sub.plan_id
-        subscriptionStatus = sub.status
+      if (sub) {
+        // Sync with Stripe to get the real status
+        const synced = await syncSubscriptionWithStripe(supabase, sub, hm.household_id)
+        
+        if (synced.status === 'Active') {
+          currentPlanId = synced.plan_id
+          subscriptionStatus = synced.status
+        }
       }
     }
   }
