@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { stripe } from '@/utils/stripe/server'
 import { createClient } from '@/utils/supabase/server'
+import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 
 export async function POST(request: NextRequest) {
   try {
@@ -20,7 +21,11 @@ export async function POST(request: NextRequest) {
     let checkoutMode: 'subscription' | 'payment' = 'subscription';
 
     if (planId) {
-      const { data: plan, error: planErr } = await supabase
+      const adminClient = createSupabaseClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!
+      )
+      const { data: plan, error: planErr } = await adminClient
         .from('membership_plans')
         .select('*')
         .eq('id', planId)
