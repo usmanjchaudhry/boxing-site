@@ -1,6 +1,18 @@
 import { stripe } from '@/utils/stripe/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 
+/** Safely convert a Stripe timestamp to a date string */
+function toDateString(val: any): string {
+  if (!val) return new Date().toISOString().split('T')[0]
+  const ts = typeof val === 'number' ? val : (val?.seconds ?? val?.unix ?? null)
+  if (!ts) return new Date().toISOString().split('T')[0]
+  try {
+    return new Date(ts * 1000).toISOString().split('T')[0]
+  } catch {
+    return new Date().toISOString().split('T')[0]
+  }
+}
+
 /**
  * Get a Supabase admin client that bypasses RLS.
  * Required because the sync runs in server components where the
@@ -77,7 +89,7 @@ export async function syncSubscriptionWithStripe(
               status: 'Active',
               stripe_subscription_id: newSub.id,
               plan_id: newPlanId,
-              start_date: new Date(newSub.current_period_start * 1000).toISOString().split('T')[0],
+              start_date: toDateString(newSub.current_period_start),
             })
             .eq('household_id', householdId)
 
