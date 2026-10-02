@@ -28,7 +28,7 @@ export default function PlanCard({ plan, isCurrentPlan }: { plan: Plan; isCurren
   ]
 
   if (plan.max_dependents > 0) {
-    features.push(`Up to ${plan.max_dependents + 1} household members`)
+    features.push(`${plan.max_dependents} household members`)
     features.push('Shared household check-in')
   } else {
     features.push('Individual access')

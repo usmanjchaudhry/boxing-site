@@ -24,3 +24,27 @@ export async function checkLegacyPassword(password: string) {
   // we just redirect them to the secret page!
   return { success: true }
 }
+
+export async function checkDevPassword(password: string) {
+  if (password !== 'usman91998') {
+    return { error: 'Access denied' }
+  }
+
+  // Verify the logged-in user is the admin
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user || user.email !== 'usmanjc98@gmail.com') {
+    return { error: 'Unauthorized account' }
+  }
+
+  const cookieStore = await cookies()
+  cookieStore.set('dev_access', 'granted', {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: 60 * 60, // 1 hour
+    path: '/'
+  })
+
+  return { success: true }
+}

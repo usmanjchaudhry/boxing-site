@@ -6,6 +6,7 @@ import Navbar from '@/components/Navbar'
 import PlanCard from '@/components/PlanCard'
 import PassCard from '@/components/PassCard'
 import LegacyModal from '@/components/LegacyModal'
+import DevModal from '@/components/DevModal'
 
 import { syncSubscriptionWithStripe } from '@/utils/stripe-sync'
 
@@ -122,8 +123,9 @@ export default async function MembershipsPage() {
           <p>All plans are billed monthly. You can cancel anytime from your Stripe portal.</p>
           <p>Family plans cover all members in your household up to the plan limit.</p>
           
-          <div className="pt-8">
+          <div className="pt-8 flex items-center justify-center gap-6">
             <LegacyModal />
+            <DevModal />
           </div>
         </div>
       </main>
