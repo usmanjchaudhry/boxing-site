@@ -16,15 +16,28 @@ interface Plan {
 export default function PlanCard({ plan, isCurrentPlan }: { plan: Plan; isCurrentPlan: boolean }) {
   const [loading, setLoading] = useState(false)
 
-  const isPremium = plan.name.toLowerCase().includes('premium')
-  const isFamily = plan.name.toLowerCase().includes('family')
+  const isDouble = plan.name.toLowerCase().includes('double')
+  const isLegacy = plan.name.toLowerCase().includes('legacy')
+  const isHighlight = isDouble || isLegacy
   const price = (plan.price_cents / 100).toFixed(2)
 
-  const features = [
+  // Build features based on plan type
+  const features: string[] = [
     'Full gym access',
-    ...(isFamily ? [`Up to ${plan.max_dependents + 1} household members`] : ['Individual access']),
-    ...(isPremium ? ['Unlimited classes', 'Priority booking', 'Guest passes'] : []),
+    'All equipment included',
   ]
+
+  if (plan.max_dependents > 0) {
+    features.push(`Up to ${plan.max_dependents + 1} household members`)
+    features.push('Shared household check-in')
+  } else {
+    features.push('Individual access')
+  }
+
+  if (isLegacy) {
+    features.push('Legacy transfer pricing')
+    features.push('Priority access')
+  }
 
   const handleSubscribe = async () => {
     setLoading(true)
@@ -51,20 +64,25 @@ export default function PlanCard({ plan, isCurrentPlan }: { plan: Plan; isCurren
 
   return (
     <div className={`relative p-6 rounded-3xl border flex flex-col justify-between transition-all duration-300 hover:scale-[1.02] ${
-      isPremium
+      isHighlight
         ? 'bg-gradient-to-b from-red-950/30 to-zinc-950 border-red-500/30 shadow-[0_0_40px_-10px_rgba(220,38,38,0.3)]'
         : 'bg-zinc-950 border-white/5 hover:border-white/10'
     }`}>
-      {/* Popular Badge */}
-      {isPremium && isFamily && (
+      {/* Badge */}
+      {isDouble && (
         <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 bg-red-600 text-white text-xs font-black rounded-full uppercase tracking-wider shadow-lg">
-          Most Popular
+          Best Value
+        </div>
+      )}
+      {isLegacy && (
+        <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 bg-gradient-to-r from-red-600 to-zinc-700 text-white text-xs font-black rounded-full uppercase tracking-wider shadow-lg">
+          Classified
         </div>
       )}
 
       <div>
         {/* Plan Name */}
-        <h3 className={`text-lg font-bold mb-1 ${isPremium ? 'text-red-400' : 'text-zinc-300'}`}>
+        <h3 className={`text-lg font-bold mb-1 ${isHighlight ? 'text-red-400' : 'text-zinc-300'}`}>
           {plan.name}
         </h3>
 
@@ -81,7 +99,7 @@ export default function PlanCard({ plan, isCurrentPlan }: { plan: Plan; isCurren
         <ul className="space-y-2 mb-8">
           {features.map((feature, i) => (
             <li key={i} className="flex items-center gap-2 text-sm text-zinc-300">
-              <span className={`text-xs ${isPremium ? 'text-red-500' : 'text-green-500'}`}>✓</span>
+              <span className={`text-xs ${isHighlight ? 'text-red-500' : 'text-green-500'}`}>✓</span>
               {feature}
             </li>
           ))}
@@ -97,7 +115,7 @@ export default function PlanCard({ plan, isCurrentPlan }: { plan: Plan; isCurren
             ? 'bg-green-500/10 text-green-500 border border-green-500/20 cursor-default'
             : !plan.stripe_price_id
               ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
-              : isPremium
+              : isHighlight
                 ? 'bg-red-600 text-white hover:bg-red-700 shadow-[0_0_20px_-5px_rgba(220,38,38,0.5)]'
                 : 'bg-white text-black hover:bg-zinc-200'
         }`}

@@ -77,7 +77,7 @@ export default async function MembershipsPage() {
             Choose Your Plan
           </h1>
           <p className="text-zinc-400 text-sm sm:text-lg max-w-xl mx-auto">
-            Unlock full gym access for yourself or your entire family. Cancel anytime.
+            Unlock full gym access. Train with the best. Cancel anytime.
           </p>
         </div>
 
@@ -91,7 +91,7 @@ export default async function MembershipsPage() {
         )}
 
         {/* Plans Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-16">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 sm:gap-8 max-w-3xl mx-auto mb-16">
           {(plans || []).map((plan) => (
             <PlanCard
               key={plan.id}
@@ -109,7 +109,7 @@ export default async function MembershipsPage() {
               <p className="text-zinc-400 text-sm sm:text-lg">Just visiting? Grab a day pass and jump into the action.</p>
             </div>
             
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 justify-center">
+            <div className="grid grid-cols-1 max-w-md mx-auto gap-4 sm:gap-6">
               {passes.map((pass) => (
                 <PassCard key={pass.id} pass={pass} />
               ))}
