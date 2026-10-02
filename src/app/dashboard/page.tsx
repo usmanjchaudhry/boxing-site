@@ -72,7 +72,7 @@ export default async function DashboardPage() {
         // Enterprise Stripe sync — verify against Stripe, detect re-subscribes
         try {
           const { syncSubscriptionWithStripe } = await import('@/utils/stripe-sync')
-          const synced = await syncSubscriptionWithStripe(supabase, sub, householdId)
+          const synced = await syncSubscriptionWithStripe(sub, householdId)
 
           if (synced.status !== sub.status || synced.plan_id !== sub.plan_id) {
             // Re-fetch to get updated plan name

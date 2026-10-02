@@ -40,7 +40,7 @@ export default async function MembershipsPage() {
 
       if (sub) {
         // Sync with Stripe to get the real status
-        const synced = await syncSubscriptionWithStripe(supabase, sub, hm.household_id)
+        const synced = await syncSubscriptionWithStripe(sub, hm.household_id)
         
         if (synced.status === 'Active') {
           currentPlanId = synced.plan_id
