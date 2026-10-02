@@ -47,6 +47,12 @@ export default function NavbarClient({ profile, isLoggedIn, isAdmin }: {
                 Schedule
               </Link>
               <Link 
+                href="/trainers" 
+                className="text-sm font-medium text-zinc-400 hover:text-white transition-colors"
+              >
+                Trainers
+              </Link>
+              <Link 
                 href="/dashboard" 
                 className="bg-white text-black px-5 py-2.5 rounded-full text-sm font-semibold hover:bg-zinc-200 transition-all active:scale-95"
               >
@@ -62,6 +68,9 @@ export default function NavbarClient({ profile, isLoggedIn, isAdmin }: {
             <>
               <Link href="/schedule" className="text-sm font-medium text-zinc-400 hover:text-white transition-colors">
                 Schedule
+              </Link>
+              <Link href="/trainers" className="text-sm font-medium text-zinc-400 hover:text-white transition-colors">
+                Trainers
               </Link>
               <Link href="/login" className="text-sm font-medium text-zinc-400 hover:text-white transition-colors">
                 Sign In
@@ -121,6 +130,13 @@ export default function NavbarClient({ profile, isLoggedIn, isAdmin }: {
                 Schedule
               </Link>
               <Link 
+                href="/trainers" 
+                onClick={() => setMenuOpen(false)}
+                className="block text-center bg-white/5 text-white px-5 py-3 rounded-xl text-sm font-semibold border border-white/10 hover:bg-white/10 transition-all"
+              >
+                Trainers
+              </Link>
+              <Link 
                 href="/memberships" 
                 onClick={() => setMenuOpen(false)}
                 className="block text-center bg-white/5 text-white px-5 py-3 rounded-xl text-sm font-semibold border border-white/10 hover:bg-white/10 transition-all"
@@ -141,6 +157,13 @@ export default function NavbarClient({ profile, isLoggedIn, isAdmin }: {
                 className="block text-center bg-white text-black px-5 py-3 rounded-xl text-sm font-semibold hover:bg-zinc-200 transition-all active:scale-95"
               >
                 Sign In
+              </Link>
+              <Link 
+                href="/trainers" 
+                onClick={() => setMenuOpen(false)}
+                className="block text-center bg-white/5 text-white px-5 py-3 rounded-xl text-sm font-semibold border border-white/10 hover:bg-white/10 transition-all"
+              >
+                Trainers
               </Link>
               <Link 
                 href="/login?mode=register" 
