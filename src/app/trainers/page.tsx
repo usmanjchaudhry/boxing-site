@@ -73,18 +73,7 @@ export default function TrainersPage() {
                     {trainer.name}
                   </h3>
                   
-                  {/* Specialties — always visible on mobile, slide up on desktop hover */}
-                  <div className="sm:grid sm:grid-rows-[0fr] sm:group-hover:grid-rows-[1fr] sm:transition-[grid-template-rows] sm:duration-500 sm:ease-out">
-                    <div className="sm:overflow-hidden">
-                      <div className="flex flex-wrap gap-1.5 sm:gap-2 mt-1">
-                        {trainer.specialties.map((spec, i) => (
-                          <span key={i} className="px-2.5 py-1 bg-red-950/60 border border-red-900/50 text-red-300 text-[10px] uppercase font-bold tracking-wider rounded-full backdrop-blur-sm">
-                            {spec}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
+
                 </div>
               </div>
             </div>
