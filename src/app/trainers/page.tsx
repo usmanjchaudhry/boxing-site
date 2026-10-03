@@ -60,7 +60,7 @@ export default function TrainersPage() {
                   src={trainer.image} 
                   alt={trainer.name}
                   fill
-                  className="object-cover object-[center_20%] transition-transform duration-700 group-hover:scale-105"
+                  className="object-cover object-[center_10%] transition-transform duration-700 group-hover:scale-105"
                   sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
                 />
                 
