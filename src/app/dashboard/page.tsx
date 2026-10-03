@@ -134,7 +134,8 @@ export default async function DashboardPage() {
       .from('waiver_templates')
       .select('id')
       .eq('is_active', true)
-      .single()
+      .limit(1)
+      .maybeSingle()
 
     if (template) {
       for (const member of householdMembers) {
@@ -161,7 +162,8 @@ export default async function DashboardPage() {
       .from('waiver_templates')
       .select('id, body_text')
       .eq('is_active', true)
-      .single()
+      .limit(1)
+      .maybeSingle()
 
     if (template) {
       for (const member of householdMembers) {
