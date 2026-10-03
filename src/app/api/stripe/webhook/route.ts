@@ -44,25 +44,12 @@ function verifyEvent(body: string, signature: string): any | null {
 }
 
 /**
- * Idempotency: record each Stripe event id once. Stripe retries events, and when
- * more than one endpoint targets this deployment every event arrives multiple
- * times. Without this, a day pass could be minted twice.
- * Returns false if the event was already processed.
+ * Supabase returns errors instead of throwing. Any failed write must surface as a
+ * 500 so Stripe retries the event (it retries for up to 3 days in live mode);
+ * returning 200 after a failed write would leave a paid customer with nothing.
  */
-async function claimEvent(supabase: ReturnType<typeof getAdminClient>, event: any): Promise<boolean> {
-  const { error } = await supabase
-    .from('stripe_webhook_events')
-    .insert({ event_id: event.id, type: event.type })
-  if (!error) return true
-  if (error.code === '23505') return false // unique violation -> already handled
-  // Table missing or other DB issue: don't drop the event, just process it.
-  console.warn('[webhook] Idempotency check unavailable:', error.message)
-  return true
-}
-
-async function releaseEvent(supabase: ReturnType<typeof getAdminClient>, eventId: string) {
-  // Processing failed: forget the claim so Stripe's retry can process it again.
-  await supabase.from('stripe_webhook_events').delete().eq('event_id', eventId)
+function assertOk(error: { message: string } | null, action: string) {
+  if (error) throw new Error(`${action}: ${error.message}`)
 }
 
 export async function POST(request: NextRequest) {
@@ -83,11 +70,6 @@ export async function POST(request: NextRequest) {
 
   console.log('STRIPE WEBHOOK:', event.type, event.id)
 
-  if (!(await claimEvent(supabase, event))) {
-    console.log('[webhook] Duplicate event ignored:', event.id)
-    return NextResponse.json({ received: true, duplicate: true })
-  }
-
   try {
     switch (event.type) {
       case 'checkout.session.completed': {
@@ -101,27 +83,29 @@ export async function POST(request: NextRequest) {
         console.log('WEBHOOK DEBUG checkout.session.completed:', { householdId, planId, productId, stripeSubscriptionId })
 
         if (session.mode === 'payment' && productId && profileId) {
+          // Only fulfil once the money has actually been captured.
+          if (session.payment_status !== 'paid') {
+            console.warn('[webhook] Checkout completed but not paid; no pass minted:', session.id, session.payment_status)
+            break
+          }
           // It's a Day Pass (or retail item)! Mint the pass for the user.
           const { error } = await supabase.from('passes').insert({
             profile_id: profileId,
             pass_type: 'Day Pass',
             status: 'Available'
           })
-          if (error) {
-            console.error('Failed to mint pass:', error)
-          } else {
-            console.log('Successfully minted Day Pass for profile:', profileId)
-            const email = session.customer_details?.email
-            if (email) {
-              await sendGymEmail(
-                email,
-                'Your Day Pass Receipt',
-                `<h2 style="margin-top:0; color:#fff;">Day Pass Purchased!</h2>
-                 <p style="color:#aaa; line-height: 1.5;">Your payment of <strong>$${(session.amount_total! / 100).toFixed(2)}</strong> was successful.</p>
-                 <p style="color:#aaa; line-height: 1.5;">Your ticket is available on your dashboard. Simply click "Use Ticket" and show the QR code at the front desk to enter.</p>
-                 <a href="${process.env.NEXT_PUBLIC_SITE_URL}/dashboard" style="display:inline-block; background-color:#dc2626; color:#fff; padding:12px 24px; text-decoration:none; border-radius:8px; font-weight:bold; margin-top:20px; font-size:14px;">Go to Dashboard</a>`
-              )
-            }
+          assertOk(error, 'Failed to mint pass')
+          console.log('Successfully minted Day Pass for profile:', profileId)
+          const email = session.customer_details?.email
+          if (email) {
+            await sendGymEmail(
+              email,
+              'Your Day Pass Receipt',
+              `<h2 style="margin-top:0; color:#fff;">Day Pass Purchased!</h2>
+               <p style="color:#aaa; line-height: 1.5;">Your payment of <strong>$${(session.amount_total! / 100).toFixed(2)}</strong> was successful.</p>
+               <p style="color:#aaa; line-height: 1.5;">Your ticket is available on your dashboard. Simply click "Use Ticket" and show the QR code at the front desk to enter.</p>
+               <a href="${process.env.NEXT_PUBLIC_SITE_URL}/dashboard" style="display:inline-block; background-color:#dc2626; color:#fff; padding:12px 24px; text-decoration:none; border-radius:8px; font-weight:bold; margin-top:20px; font-size:14px;">Go to Dashboard</a>`
+            )
           }
         } else if (householdId && planId && stripeSubscriptionId) {
           // Fetch the subscription from Stripe to get the current period
@@ -132,6 +116,16 @@ export async function POST(request: NextRequest) {
           const endDate = toDateString(sub.current_period_end)
 
           console.log('WEBHOOK DEBUG dates:', { startDate, endDate })
+
+          // If Stripe re-delivers this event, the row is already active for this
+          // subscription: still re-apply the upsert (harmless) but don't re-send the welcome email.
+          const { data: existing, error: lookupError } = await supabase
+            .from('subscriptions')
+            .select('status, stripe_subscription_id')
+            .eq('household_id', householdId)
+            .maybeSingle()
+          assertOk(lookupError, 'Failed to read subscription')
+          const alreadyActive = existing?.status === 'Active' && existing?.stripe_subscription_id === stripeSubscriptionId
 
           // Upsert subscription in our database
           const { error } = await supabase.from('subscriptions').upsert({
@@ -145,21 +139,18 @@ export async function POST(request: NextRequest) {
             onConflict: 'household_id'
           })
 
-          if (error) {
-            console.error('Failed to upsert subscription:', error)
-          } else {
-            console.log('Subscription activated for household:', householdId)
-            const email = session.customer_details?.email
-            if (email) {
-              await sendGymEmail(
-                email,
-                'Welcome to La Familia Boxing!',
-                `<h2 style="margin-top:0; color:#fff;">Membership Activated</h2>
-                 <p style="color:#aaa; line-height: 1.5;">Your subscription payment of <strong>$${(session.amount_total! / 100).toFixed(2)}</strong> was successful. Welcome to the family!</p>
-                 <p style="color:#aaa; line-height: 1.5;">Your gym access QR codes are now active. Scan them at the front desk whenever you visit.</p>
-                 <a href="${process.env.NEXT_PUBLIC_SITE_URL}/dashboard" style="display:inline-block; background-color:#dc2626; color:#fff; padding:12px 24px; text-decoration:none; border-radius:8px; font-weight:bold; margin-top:20px; font-size:14px;">View QR Codes</a>`
-              )
-            }
+          assertOk(error, 'Failed to upsert subscription')
+          console.log('Subscription activated for household:', householdId)
+          const email = session.customer_details?.email
+          if (email && !alreadyActive) {
+            await sendGymEmail(
+              email,
+              'Welcome to La Familia Boxing!',
+              `<h2 style="margin-top:0; color:#fff;">Membership Activated</h2>
+               <p style="color:#aaa; line-height: 1.5;">Your subscription payment of <strong>$${(session.amount_total! / 100).toFixed(2)}</strong> was successful. Welcome to the family!</p>
+               <p style="color:#aaa; line-height: 1.5;">Your gym access QR codes are now active. Scan them at the front desk whenever you visit.</p>
+               <a href="${process.env.NEXT_PUBLIC_SITE_URL}/dashboard" style="display:inline-block; background-color:#dc2626; color:#fff; padding:12px 24px; text-decoration:none; border-radius:8px; font-weight:bold; margin-top:20px; font-size:14px;">View QR Codes</a>`
+            )
           }
         }
         break
@@ -178,13 +169,14 @@ export async function POST(request: NextRequest) {
             const startDate = toDateString(sub.current_period_start) || new Date().toISOString().split('T')[0]
             const endDate = toDateString(sub.current_period_end)
 
-            await supabase.from('subscriptions')
+            const { error } = await supabase.from('subscriptions')
               .update({
                 status: 'Active',
                 start_date: startDate,
                 end_date: endDate,
               })
               .eq('household_id', householdId)
+            assertOk(error, 'Failed to renew subscription')
 
             console.log('Subscription renewed for household:', householdId)
             
@@ -216,9 +208,10 @@ export async function POST(request: NextRequest) {
           const householdId = sub.metadata?.household_id
 
           if (householdId) {
-            await supabase.from('subscriptions')
+            const { error } = await supabase.from('subscriptions')
               .update({ status: 'Past_Due' })
               .eq('household_id', householdId)
+            assertOk(error, 'Failed to mark subscription past due')
 
             console.log('Payment failed for household:', householdId)
           }
@@ -232,11 +225,12 @@ export async function POST(request: NextRequest) {
 
         // Fallback: look up by stripe_subscription_id if metadata is missing
         if (!householdId) {
-          const { data: localSub } = await supabase
+          const { data: localSub, error: lookupError } = await supabase
             .from('subscriptions')
             .select('household_id')
             .eq('stripe_subscription_id', sub.id)
-            .single()
+            .maybeSingle()
+          assertOk(lookupError, 'Failed to look up subscription')
           householdId = localSub?.household_id
         }
 
@@ -246,9 +240,10 @@ export async function POST(request: NextRequest) {
           else if (sub.status === 'past_due') status = 'Past_Due'
           else if (sub.pause_collection) status = 'Frozen'
 
-          await supabase.from('subscriptions')
+          const { error } = await supabase.from('subscriptions')
             .update({ status })
             .eq('household_id', householdId)
+          assertOk(error, 'Failed to update subscription status')
 
           console.log('Subscription status updated to', status, 'for household:', householdId)
         }
@@ -261,18 +256,20 @@ export async function POST(request: NextRequest) {
 
         // Fallback: look up by stripe_subscription_id if metadata is missing
         if (!householdId) {
-          const { data: localSub } = await supabase
+          const { data: localSub, error: lookupError } = await supabase
             .from('subscriptions')
             .select('household_id')
             .eq('stripe_subscription_id', sub.id)
-            .single()
+            .maybeSingle()
+          assertOk(lookupError, 'Failed to look up subscription')
           householdId = localSub?.household_id
         }
 
         if (householdId) {
-          await supabase.from('subscriptions')
+          const { error } = await supabase.from('subscriptions')
             .update({ status: 'Cancelled' })
             .eq('household_id', householdId)
+          assertOk(error, 'Failed to cancel subscription')
 
           console.log('Subscription cancelled for household:', householdId)
         }
@@ -280,9 +277,9 @@ export async function POST(request: NextRequest) {
       }
     }
   } catch (err: any) {
-    console.error('WEBHOOK HANDLER ERROR:', err.message, err.stack)
-    await releaseEvent(supabase, event.id)
-    return NextResponse.json({ error: err.message }, { status: 500 })
+    // Non-2xx tells Stripe to retry this event later.
+    console.error('WEBHOOK HANDLER ERROR:', event.type, event.id, err.message, err.stack)
+    return NextResponse.json({ error: 'Webhook processing failed' }, { status: 500 })
   }
 
   return NextResponse.json({ received: true })
