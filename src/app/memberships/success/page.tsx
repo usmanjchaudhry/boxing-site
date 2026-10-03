@@ -41,13 +41,10 @@ export default async function MembershipSuccessPage({
 
       if (householdId && stripeSubscriptionId && planId) {
         const adminDb = getAdminDb()
-
-        // Retrieve the subscription to get period dates
         const sub = await stripe.subscriptions.retrieve(stripeSubscriptionId) as any
         const startDate = toDateString(sub.current_period_start) || new Date().toISOString().split('T')[0]
         const endDate = toDateString(sub.current_period_end)
 
-        // Upsert the subscription — same logic as webhook but guaranteed to run
         const { error } = await adminDb.from('subscriptions').upsert({
           household_id: householdId,
           plan_id: planId,
@@ -60,10 +57,32 @@ export default async function MembershipSuccessPage({
           onConflict: 'household_id'
         })
 
-        if (error) {
-          console.error('[success-page] Upsert error:', error)
-        } else {
-          console.log('[success-page] Subscription confirmed for household:', householdId)
+        if (error) console.error('[success-page] Upsert error:', error)
+      } 
+      // Handle one-time purchases (like Day Passes)
+      else if (session.metadata?.product_id && session.metadata?.profile_id) {
+        const adminDb = getAdminDb()
+        const productId = session.metadata.product_id
+        const profileId = session.metadata.profile_id
+
+        // Check if it's a day pass
+        const { data: product } = await adminDb.from('products').select('category').eq('id', productId).single()
+        
+        if (product?.category === 'DayPass') {
+          console.log('[success-page] Confirming Day Pass for profile:', profileId)
+          
+          // Check if this specific checkout session already created a pass (idempotency)
+          const { data: existing } = await adminDb.from('passes').select('id').eq('receipt_line_item_id', sessionId).maybeSingle()
+          
+          if (!existing) {
+            const { error } = await adminDb.from('passes').insert({
+              profile_id: profileId,
+              pass_type: 'Day Pass',
+              status: 'Available',
+              receipt_line_item_id: sessionId // Hack: using sessionId as idempotency key temporarily since we bypass webhook receipt creation here
+            })
+            if (error) console.error('[success-page] Error minting day pass:', error)
+          }
         }
       }
     } catch (err: any) {
