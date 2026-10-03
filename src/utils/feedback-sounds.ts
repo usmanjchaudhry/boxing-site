@@ -49,10 +49,6 @@ export const feedbackSounds = {
     tone(880, 0, 0.12)
     tone(1318.5, 0.1, 0.22)
   },
-  /** Soft single note for "already checked in" */
-  info() {
-    tone(988, 0, 0.18)
-  },
   /** Low double buzz */
   denied() {
     tone(196, 0, 0.18, 'square', 0.12)

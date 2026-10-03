@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  ScanLine, Loader2, CheckCircle2, XCircle, AlertTriangle, Info, Volume2, VolumeX,
+  ScanLine, Loader2, CheckCircle2, XCircle, AlertTriangle, Volume2, VolumeX,
   Search, UserRound, History, WifiOff, MousePointerClick,
 } from 'lucide-react'
 import { useBarcodeScanner } from '@/hooks/useBarcodeScanner'
@@ -12,7 +12,7 @@ import { feedbackSounds, unlockAudio, isAudioUnlocked } from '@/utils/feedback-s
 /* ────────────────────────────────────────────────────────────
  * Config
  * ──────────────────────────────────────────────────────────── */
-const AUTO_RESET_MS = { success: 4000, info: 4000, warning: 9000, error: 9000 } as const
+const AUTO_RESET_MS = { success: 4000, warning: 9000, error: 9000 } as const
 const SAME_CODE_COOLDOWN_MS = 3000 // scanners can read the same screen twice in a row
 const RECENT_LIMIT = 8
 
@@ -34,12 +34,12 @@ interface MemberOption {
 
 /** Map a result to a visual/aural tone and a next step for the staff member. */
 function classify(result: CheckinResult): { tone: Tone; staffAction?: string } {
-  if (result.status === 'allowed') return { tone: result.duplicate ? 'info' : 'success' }
+  if (result.status === 'allowed') return { tone: 'success' }
   switch (result.flag) {
     case 'Waiver Required':
       return { tone: 'warning', staffAction: 'Have them open the app and sign the waiver, then scan again.' }
     case 'Payment Due':
-      return { tone: 'warning', staffAction: 'Ask them to update their card under Dashboard → Billing.' }
+      return { tone: 'warning', staffAction: 'Ask them to tap "Update Payment" on their dashboard.' }
     case 'Membership Expired':
       return { tone: 'warning', staffAction: 'Offer a renewal or record a cash payment in Admin.' }
     case 'Daily Limit Reached':
@@ -57,14 +57,6 @@ const TONE_STYLES: Record<Tone, { panel: string; ring: string; icon: string; pil
     pill: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30',
     bar: 'bg-emerald-500',
     Icon: CheckCircle2,
-  },
-  info: {
-    panel: 'bg-sky-950/40 border-sky-500/40',
-    ring: 'bg-sky-500/15 text-sky-400 shadow-[0_0_60px_-10px_rgba(14,165,233,0.6)]',
-    icon: 'text-sky-400',
-    pill: 'bg-sky-500/10 text-sky-300 border-sky-500/30',
-    bar: 'bg-sky-500',
-    Icon: Info,
   },
   warning: {
     panel: 'bg-amber-950/40 border-amber-500/40',
@@ -156,7 +148,6 @@ export default function CheckinScanner() {
 
     if (soundOnRef.current) {
       if (tone === 'success') feedbackSounds.success()
-      else if (tone === 'info') feedbackSounds.info()
       else feedbackSounds.denied()
     }
 

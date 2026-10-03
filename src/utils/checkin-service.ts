@@ -80,14 +80,15 @@ export async function processCheckin(
     }
   }
 
-  // 2. Duplicate-scan guard: same member, successful check-in moments ago
+  // 2. Repeat scan moments after a successful check-in: let them in again, but
+  //    don't write a second log row (keeps "Today's check-ins" accurate) and
+  //    don't re-evaluate access (a day pass was already consumed on the first scan).
   const { data: recent } = await db
     .from('gym_checkins')
-    .select('scanned_at')
+    .select('id')
     .eq('profile_id', profileId)
     .eq('status_flag', 'Success')
     .gte('scanned_at', new Date(Date.now() - DUPLICATE_WINDOW_MS).toISOString())
-    .order('scanned_at', { ascending: false })
     .limit(1)
     .maybeSingle()
 
@@ -96,12 +97,8 @@ export async function processCheckin(
       httpStatus: 200,
       body: {
         status: 'allowed',
-        flag: 'Already Checked In',
-        message: `Checked in at ${new Date(recent.scanned_at).toLocaleTimeString('en-US', {
-          timeZone: facility?.timezone || DEFAULT_TIMEZONE,
-          hour: 'numeric',
-          minute: '2-digit',
-        })}. No need to scan again.`,
+        flag: 'Checked In',
+        message: 'Welcome! Enjoy your workout.',
         member: profile,
         duplicate: true,
       },
