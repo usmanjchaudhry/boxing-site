@@ -269,12 +269,12 @@ export default async function Home() {
                   <Clock className="w-3.5 h-3.5 text-red-500 shrink-0" />
                   <span className="text-zinc-300 font-medium">Mon–Fri</span>
                 </div>
-                <p className="pl-5.5 ml-[1.375rem]">5:30 AM — 9:00 PM</p>
+                <p className="pl-5.5 ml-[1.375rem]">5:00 AM — 10:00 PM</p>
                 <div className="flex items-center gap-2 pt-1">
                   <Clock className="w-3.5 h-3.5 text-red-500 shrink-0" />
                   <span className="text-zinc-300 font-medium">Sat–Sun</span>
                 </div>
-                <p className="pl-5.5 ml-[1.375rem]">7:00 AM — 5:00 PM</p>
+                <p className="pl-5.5 ml-[1.375rem]">6:00 AM — 3:00 PM</p>
               </div>
             </div>
 

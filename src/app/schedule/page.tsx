@@ -170,7 +170,7 @@ export default function SchedulePage() {
             <Clock className="w-6 h-6 text-red-500 mx-auto mb-3" />
             <h3 className="font-bold text-sm mb-1">Gym Hours</h3>
             <p className="text-xs text-zinc-400">Mon–Fri: 5 AM – 10 PM</p>
-            <p className="text-xs text-zinc-400">Sat–Sun: 7 AM – 6 PM</p>
+            <p className="text-xs text-zinc-400">Sat–Sun: 6 AM – 3 PM</p>
           </div>
           <div className="rounded-2xl bg-zinc-950 border border-white/5 p-6 text-center">
             <MapPin className="w-6 h-6 text-red-500 mx-auto mb-3" />
