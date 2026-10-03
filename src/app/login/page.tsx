@@ -226,7 +226,7 @@ function LoginPageContent() {
                       type="tel"
                       required={isRegister}
                       className="block w-full rounded-xl border-0 bg-black/50 py-3 px-4 text-white shadow-sm ring-1 ring-inset ring-white/10 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6 transition-all"
-                      placeholder="555-010-0101"
+                      placeholder="747-265-9364"
                     />
                   </div>
                 </div>

@@ -175,8 +175,8 @@ export default function SchedulePage() {
           <div className="rounded-2xl bg-zinc-950 border border-white/5 p-6 text-center">
             <MapPin className="w-6 h-6 text-red-500 mx-auto mb-3" />
             <h3 className="font-bold text-sm mb-1">Location</h3>
-            <p className="text-xs text-zinc-400">123 Main Street</p>
-            <p className="text-xs text-zinc-400">Los Angeles, CA 90001</p>
+            <p className="text-xs text-zinc-400">18323 Sherman Way</p>
+            <p className="text-xs text-zinc-400">Reseda, CA 91335</p>
           </div>
           <div className="rounded-2xl bg-zinc-950 border border-white/5 p-6 text-center">
             <Users className="w-6 h-6 text-red-500 mx-auto mb-3" />

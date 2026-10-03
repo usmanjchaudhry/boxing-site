@@ -246,13 +246,13 @@ export default async function Home() {
                 <div className="flex items-start gap-3">
                   <MapPin className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
                   <div>
-                    <p className="text-zinc-200 font-medium">1247 Champion Boulevard, Suite 200</p>
-                    <p>Los Angeles, CA 90015</p>
+                    <p className="text-zinc-200 font-medium">18323 Sherman Way</p>
+                    <p>Reseda, CA 91335</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
                   <Phone className="w-4 h-4 text-red-500 shrink-0" />
-                  <a href="tel:+12135550147" className="hover:text-white transition-colors">(213) 555-0147</a>
+                  <a href="tel:+17472659364" className="hover:text-white transition-colors">(747) 265-9364</a>
                 </div>
                 <div className="flex items-center gap-3">
                   <Mail className="w-4 h-4 text-red-500 shrink-0" />
