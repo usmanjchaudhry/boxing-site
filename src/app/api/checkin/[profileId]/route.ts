@@ -110,9 +110,16 @@ export async function GET(
           accessFlag = 'No Active Pass'
           accessMessage = `${plan.name} only covers the primary account holder. Upgrade to a Family plan to cover dependents.`
         } else {
-          // 4b. CHECK DAILY LIMIT
+          // 4b. CHECK DAILY LIMIT / MAX DEPENDENTS LIMIT
           let underDailyLimit = true
-          if (plan && plan.max_daily_checkins != null) {
+          
+          // Calculate the effective daily limit for unique household members
+          // It's either explicitly set via max_daily_checkins, or implicitly derived from max_dependents + 1 (primary)
+          const explicitLimit = plan?.max_daily_checkins
+          const implicitLimit = plan?.max_dependents != null ? plan.max_dependents + 1 : null
+          const effectiveLimit = explicitLimit ?? implicitLimit
+
+          if (effectiveLimit != null) {
             // Count unique check-ins for the household today
             const today = new Date()
             today.setHours(0, 0, 0, 0)
@@ -134,10 +141,10 @@ export async function GET(
                 
               const uniqueCheckins = new Set(todayCheckins?.map(c => c.profile_id))
               // If this profile hasn't checked in yet, and limit is reached, deny.
-              if (!uniqueCheckins.has(profileId) && uniqueCheckins.size >= plan.max_daily_checkins) {
+              if (!uniqueCheckins.has(profileId) && uniqueCheckins.size >= effectiveLimit) {
                 underDailyLimit = false
                 accessFlag = 'No Active Pass'
-                accessMessage = `Daily check-in limit of ${plan.max_daily_checkins} reached for this household.`
+                accessMessage = `Limit of ${effectiveLimit} household members per day reached for ${plan.name}.`
               }
             }
           }
