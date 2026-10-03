@@ -94,6 +94,24 @@ export default async function DashboardPage() {
         subscription = sub
       }
       planName = planName || (sub.membership_plans as any)?.name || null
+
+      // Fallback: If RLS blocked reading the membership_plans row (because it's an inactive Dev plan),
+      // we can fetch it using the admin client.
+      if (!planName && sub.plan_id) {
+        try {
+          const { createClient: createAdminClient } = await import('@supabase/supabase-js')
+          const adminDb = createAdminClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            process.env.SUPABASE_SERVICE_ROLE_KEY!
+          )
+          const { data: adminPlan } = await adminDb
+            .from('membership_plans')
+            .select('name')
+            .eq('id', sub.plan_id)
+            .single()
+          if (adminPlan) planName = adminPlan.name
+        } catch (e) {}
+      }
     }
   }
 
