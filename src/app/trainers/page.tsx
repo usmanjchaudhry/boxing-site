@@ -3,25 +3,28 @@ import Navbar from '@/components/Navbar'
 
 const trainers = [
   {
-    name: 'Marcus "The Hammer" Stone',
+    name: 'Coach Markos',
     role: 'Head Coach',
-    image: '/images/trainers/trainer_1.png',
-    bio: 'Former Golden Gloves champion. Specializes in heavy hitting and aggressive infighting. If you want power, Marcus is your guy.',
-    specialties: ['Power Punching', 'Strength Conditioning', 'Infighting']
+    image: '/images/coaches/coachMarkos.PNG',
+    specialties: ['Boxing Fundamentals', 'Strength & Conditioning']
   },
   {
-    name: 'Elena "Lightning" Cruz',
-    role: 'Technical Striking Coach',
-    image: '/images/trainers/trainer_2.png',
-    bio: 'Known for her blistering hand speed and impeccable footwork. Elena will make you unhittable while picking your opponents apart.',
-    specialties: ['Footwork', 'Counter Punching', 'Speed & Agility']
+    name: 'Coach Sergei',
+    role: 'Coach',
+    image: '/images/coaches/coachSergei.PNG',
+    specialties: ['Technical Training', 'Fight Preparation']
   },
   {
-    name: 'Mickey Sullivan',
-    role: 'Veteran Defensive Coach',
-    image: '/images/trainers/trainer_3.png',
-    bio: 'Over 30 years in the corner. Mickey has trained multiple regional champions. He teaches the sweet science: hit and don\'t get hit.',
-    specialties: ['Philly Shell', 'Defense', 'Fight Strategy']
+    name: 'Coach Soldier',
+    role: 'Coach',
+    image: '/images/coaches/coachSoldier.PNG',
+    specialties: ['Cardio Boxing', 'Endurance']
+  },
+  {
+    name: 'Coach Trini',
+    role: 'Coach',
+    image: '/images/coaches/coachTrini.PNG',
+    specialties: ['Pad Work', 'Sparring']
   }
 ]
 
@@ -43,7 +46,7 @@ export default function TrainersPage() {
         </div>
 
         {/* Trainers Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 sm:gap-12">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8">
           {trainers.map((trainer, index) => (
             <div 
               key={index} 
@@ -69,13 +72,10 @@ export default function TrainersPage() {
                     {trainer.name}
                   </h3>
                   
-                  {/* Bio (Slides up on hover) */}
+                  {/* Specialties (Slides up on hover) */}
                   <div className="grid grid-rows-[0fr] group-hover:grid-rows-[1fr] transition-[grid-template-rows] duration-500 ease-out">
                     <div className="overflow-hidden">
-                      <p className="text-sm text-zinc-300 mb-4 mt-2">
-                        {trainer.bio}
-                      </p>
-                      <div className="flex flex-wrap gap-2">
+                      <div className="flex flex-wrap gap-2 mt-2">
                         {trainer.specialties.map((spec, i) => (
                           <span key={i} className="px-3 py-1 bg-red-950/40 border border-red-900/50 text-red-300 text-[10px] uppercase font-bold tracking-wider rounded-full">
                             {spec}
