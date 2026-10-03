@@ -4,7 +4,7 @@ import Navbar from '@/components/Navbar'
 const trainers = [
   {
     name: 'Coach Trini',
-    role: 'Coach',
+    role: 'Head Coach',
     image: '/images/coaches/coachTrini.PNG',
     specialties: ['Pad Work', 'Sparring']
   },
@@ -16,7 +16,7 @@ const trainers = [
   },
   {
     name: 'Coach Markos',
-    role: 'Head Coach',
+    role: 'Coach',
     image: '/images/coaches/coachMarkos.PNG',
     specialties: ['Boxing Fundamentals', 'Strength & Conditioning']
   },
