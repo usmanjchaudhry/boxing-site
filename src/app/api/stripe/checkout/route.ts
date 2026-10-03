@@ -16,6 +16,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing planId or productId' }, { status: 400 })
     }
 
+    // Return the buyer to the exact host they started on. Supabase session cookies
+    // are host-only, so returning to a different domain (www vs apex, or a custom
+    // domain vs *.vercel.app) would make the user appear logged out.
+    const returnOrigin = request.nextUrl.origin
+
     let itemPriceData: any = null;
     let meta: any = {};
     let checkoutMode: 'subscription' | 'payment' = 'subscription';
@@ -119,8 +124,8 @@ export async function POST(request: NextRequest) {
       customer: stripeCustomerId,
       mode: checkoutMode,
       line_items: [itemPriceData],
-      success_url: `${process.env.NEXT_PUBLIC_SITE_URL}/memberships/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.NEXT_PUBLIC_SITE_URL}/memberships/cancel`,
+      success_url: `${returnOrigin}/memberships/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${returnOrigin}/memberships/cancel`,
       metadata: {
         household_id: householdMember.household_id,
         profile_id: profile.id, // Need this to mint the day pass to the specific person!
