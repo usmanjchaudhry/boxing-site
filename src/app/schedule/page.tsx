@@ -4,44 +4,16 @@ import { Clock, MapPin, Users, ChevronLeft, ChevronRight } from 'lucide-react'
 
 // Class schedule data — replace with DB query later
 const CLASSES = [
-  // Monday
-  { day: 'Monday',    time: '6:00 AM',  name: 'Morning Burn',       type: 'Cardio Boxing', duration: '45 min', coach: 'Coach Mike',  spots: 20, color: 'from-orange-600 to-red-600' },
-  { day: 'Monday',    time: '12:00 PM', name: 'Lunch Grind',        type: 'Boxing Basics', duration: '60 min', coach: 'Coach Sarah', spots: 15, color: 'from-red-600 to-rose-600' },
-  { day: 'Monday',    time: '5:30 PM',  name: 'Power Hour',         type: 'Strength & Conditioning', duration: '60 min', coach: 'Coach Mike', spots: 18, color: 'from-blue-600 to-indigo-600' },
-  { day: 'Monday',    time: '7:00 PM',  name: 'Fight Night Prep',   type: 'Advanced Boxing', duration: '90 min', coach: 'Coach Ray',  spots: 12, color: 'from-purple-600 to-pink-600' },
+  // Weekdays (5 AM - 10 PM)
+  { day: 'Monday',    time: '5:00 AM – 10:00 PM', name: 'Advanced Boxing', type: 'Advanced Boxing', duration: 'All Day', coach: 'Coach Ray', spots: 50, color: 'from-purple-600 to-pink-600' },
+  { day: 'Tuesday',   time: '5:00 AM – 10:00 PM', name: 'Advanced Boxing', type: 'Advanced Boxing', duration: 'All Day', coach: 'Coach Ray', spots: 50, color: 'from-purple-600 to-pink-600' },
+  { day: 'Wednesday', time: '5:00 AM – 10:00 PM', name: 'Advanced Boxing', type: 'Advanced Boxing', duration: 'All Day', coach: 'Coach Ray', spots: 50, color: 'from-purple-600 to-pink-600' },
+  { day: 'Thursday',  time: '5:00 AM – 10:00 PM', name: 'Advanced Boxing', type: 'Advanced Boxing', duration: 'All Day', coach: 'Coach Ray', spots: 50, color: 'from-purple-600 to-pink-600' },
+  { day: 'Friday',    time: '5:00 AM – 10:00 PM', name: 'Advanced Boxing', type: 'Advanced Boxing', duration: 'All Day', coach: 'Coach Ray', spots: 50, color: 'from-purple-600 to-pink-600' },
   
-  // Tuesday
-  { day: 'Tuesday',   time: '6:00 AM',  name: 'Dawn Drills',        type: 'Boxing Basics', duration: '45 min', coach: 'Coach Sarah', spots: 20, color: 'from-red-600 to-rose-600' },
-  { day: 'Tuesday',   time: '9:00 AM',  name: 'Mommy & Me Boxing',  type: 'Family Class',  duration: '45 min', coach: 'Coach Lisa',  spots: 10, color: 'from-pink-600 to-fuchsia-600' },
-  { day: 'Tuesday',   time: '5:30 PM',  name: 'Cardio Knockout',    type: 'Cardio Boxing', duration: '60 min', coach: 'Coach Mike',  spots: 25, color: 'from-orange-600 to-red-600' },
-  { day: 'Tuesday',   time: '7:00 PM',  name: 'Sparring Lab',       type: 'Sparring',      duration: '90 min', coach: 'Coach Ray',   spots: 8,  color: 'from-emerald-600 to-teal-600' },
-  
-  // Wednesday
-  { day: 'Wednesday', time: '6:00 AM',  name: 'Morning Burn',       type: 'Cardio Boxing', duration: '45 min', coach: 'Coach Mike',  spots: 20, color: 'from-orange-600 to-red-600' },
-  { day: 'Wednesday', time: '12:00 PM', name: 'Lunch Grind',        type: 'Boxing Basics', duration: '60 min', coach: 'Coach Sarah', spots: 15, color: 'from-red-600 to-rose-600' },
-  { day: 'Wednesday', time: '4:00 PM',  name: 'Youth Boxing',       type: 'Kids (8-14)',   duration: '45 min', coach: 'Coach Lisa',  spots: 12, color: 'from-amber-500 to-orange-600' },
-  { day: 'Wednesday', time: '5:30 PM',  name: 'Power Hour',         type: 'Strength & Conditioning', duration: '60 min', coach: 'Coach Mike', spots: 18, color: 'from-blue-600 to-indigo-600' },
-  { day: 'Wednesday', time: '7:00 PM',  name: 'Fight Night Prep',   type: 'Advanced Boxing', duration: '90 min', coach: 'Coach Ray', spots: 12, color: 'from-purple-600 to-pink-600' },
-  
-  // Thursday
-  { day: 'Thursday',  time: '6:00 AM',  name: 'Dawn Drills',        type: 'Boxing Basics', duration: '45 min', coach: 'Coach Sarah', spots: 20, color: 'from-red-600 to-rose-600' },
-  { day: 'Thursday',  time: '9:00 AM',  name: 'Mommy & Me Boxing',  type: 'Family Class',  duration: '45 min', coach: 'Coach Lisa',  spots: 10, color: 'from-pink-600 to-fuchsia-600' },
-  { day: 'Thursday',  time: '5:30 PM',  name: 'Cardio Knockout',    type: 'Cardio Boxing', duration: '60 min', coach: 'Coach Mike',  spots: 25, color: 'from-orange-600 to-red-600' },
-  { day: 'Thursday',  time: '7:00 PM',  name: 'Sparring Lab',       type: 'Sparring',      duration: '90 min', coach: 'Coach Ray',   spots: 8,  color: 'from-emerald-600 to-teal-600' },
-  
-  // Friday
-  { day: 'Friday',    time: '6:00 AM',  name: 'Morning Burn',       type: 'Cardio Boxing', duration: '45 min', coach: 'Coach Mike',  spots: 20, color: 'from-orange-600 to-red-600' },
-  { day: 'Friday',    time: '12:00 PM', name: 'Lunch Grind',        type: 'Boxing Basics', duration: '60 min', coach: 'Coach Sarah', spots: 15, color: 'from-red-600 to-rose-600' },
-  { day: 'Friday',    time: '5:30 PM',  name: 'TGIF Knockout',      type: 'Cardio Boxing', duration: '60 min', coach: 'Coach Mike',  spots: 30, color: 'from-orange-600 to-red-600' },
-  
-  // Saturday
-  { day: 'Saturday',  time: '8:00 AM',  name: 'Weekend Warrior',    type: 'Advanced Boxing', duration: '90 min', coach: 'Coach Ray',  spots: 15, color: 'from-purple-600 to-pink-600' },
-  { day: 'Saturday',  time: '10:00 AM', name: 'Youth Boxing',       type: 'Kids (8-14)',   duration: '45 min', coach: 'Coach Lisa',  spots: 12, color: 'from-amber-500 to-orange-600' },
-  { day: 'Saturday',  time: '11:00 AM', name: 'Open Gym',           type: 'Open Gym',      duration: '120 min', coach: 'Self-Guided', spots: 30, color: 'from-zinc-600 to-zinc-700' },
-  
-  // Sunday
-  { day: 'Sunday',    time: '9:00 AM',  name: 'Sunday Sweat',       type: 'Cardio Boxing', duration: '60 min', coach: 'Coach Sarah', spots: 25, color: 'from-orange-600 to-red-600' },
-  { day: 'Sunday',    time: '11:00 AM', name: 'Open Gym',           type: 'Open Gym',      duration: '120 min', coach: 'Self-Guided', spots: 30, color: 'from-zinc-600 to-zinc-700' },
+  // Weekends (6 AM - 3 PM)
+  { day: 'Saturday',  time: '6:00 AM – 3:00 PM',  name: 'Advanced Boxing', type: 'Advanced Boxing', duration: 'All Day', coach: 'Coach Ray', spots: 50, color: 'from-purple-600 to-pink-600' },
+  { day: 'Sunday',    time: '6:00 AM – 3:00 PM',  name: 'Advanced Boxing', type: 'Advanced Boxing', duration: 'All Day', coach: 'Coach Ray', spots: 50, color: 'from-purple-600 to-pink-600' },
 ]
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
