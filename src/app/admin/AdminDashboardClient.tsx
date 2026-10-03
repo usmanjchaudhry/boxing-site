@@ -435,7 +435,7 @@ export default function AdminDashboardClient({ role }: { role: string }) {
                     <td className="px-4 sm:px-6 py-3">
                       {m.stripeCustomerId ? (
                         <a 
-                          href={`https://dashboard.stripe.com/acct_1UJKVcLhPZ2Xh0zp/customers/${m.stripeCustomerId}`}
+                          href={`https://dashboard.stripe.com/customers/${m.stripeCustomerId}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="font-medium text-blue-400 hover:text-blue-300 underline decoration-blue-400/30 hover:decoration-blue-300 transition-colors"
