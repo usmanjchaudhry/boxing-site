@@ -307,7 +307,19 @@ export default function AdminDashboardClient({ role }: { role: string }) {
 
       {/* CHECK-IN TAB */}
       {activeTab === 'checkin' && (
-        <CheckinScanner />
+        <div className="space-y-4">
+          <div className="flex items-center justify-between gap-4 rounded-2xl border border-white/5 bg-zinc-950 px-4 py-3">
+            <p className="text-xs text-zinc-500">Tip: use the full-screen kiosk on the front-desk computer. Nothing else on that page can take focus from the scanner.</p>
+            <a
+              id="admin-open-kiosk"
+              href="/checkin"
+              className="shrink-0 px-3 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition-colors"
+            >
+              Open kiosk ↗
+            </a>
+          </div>
+          <CheckinScanner />
+        </div>
       )}
 
       {/* PAYMENTS TAB */}

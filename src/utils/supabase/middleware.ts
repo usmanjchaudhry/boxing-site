@@ -35,9 +35,10 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
+  const protectedPrefixes = ['/dashboard', '/admin', '/checkin']
   if (
     !user &&
-    request.nextUrl.pathname.startsWith('/dashboard')
+    protectedPrefixes.some(p => request.nextUrl.pathname.startsWith(p))
   ) {
     // no user, potentially respond by redirecting the user to the login page
     const url = request.nextUrl.clone()
