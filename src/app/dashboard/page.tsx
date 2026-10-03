@@ -210,25 +210,30 @@ export default async function DashboardPage() {
           {/* Membership Status Card */}
           <div className="p-6 rounded-3xl bg-zinc-950 border border-white/5 flex flex-col justify-between">
             <div>
-              <h3 className="text-lg font-semibold mb-4 text-zinc-300">Membership Status</h3>
+              <h3 className="text-lg font-semibold mb-4 text-zinc-300">Membership</h3>
               <div className="flex items-end gap-3 mb-2">
-                <span className={`text-3xl font-black ${
+                <span className={`text-2xl sm:text-3xl font-black ${
                   isActive ? 'text-green-400' 
                   : subscription?.status === 'Past_Due' ? 'text-amber-400'
                   : subscription?.status === 'Cancelled' ? 'text-red-400'
                   : 'text-white'
                 }`}>
-                  {isActive ? 'Active' 
-                   : subscription?.status === 'Past_Due' ? 'Past Due'
-                   : subscription?.status === 'Cancelled' ? 'Cancelled'
-                   : 'Inactive'}
+                  {isActive && planName ? planName : (
+                    isActive ? 'Active' 
+                    : subscription?.status === 'Past_Due' ? 'Past Due'
+                    : subscription?.status === 'Cancelled' ? 'Cancelled'
+                    : 'No Active Plan'
+                  )}
                 </span>
               </div>
               {isActive && planName && (
-                <p className="text-sm text-zinc-400 mt-1">{planName}</p>
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                  <p className="text-sm font-medium text-zinc-300">Active</p>
+                </div>
               )}
               {isActive && subscription?.end_date && (
-                <p className="text-sm text-zinc-500 mt-1">
+                <p className="text-xs text-zinc-500 mt-1">
                   Renews: {new Date(subscription.end_date).toLocaleDateString()}
                 </p>
               )}
