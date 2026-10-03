@@ -24,6 +24,47 @@ function toDateString(val: any): string | null {
   }
 }
 
+/**
+ * STRIPE_WEBHOOK_SECRET may hold several comma-separated secrets, one per Stripe
+ * webhook endpoint that points at this deployment (each endpoint has its own whsec_).
+ */
+function verifyEvent(body: string, signature: string): any | null {
+  const secrets = (process.env.STRIPE_WEBHOOK_SECRET || '')
+    .split(',')
+    .map(s => s.trim())
+    .filter(Boolean)
+  for (const secret of secrets) {
+    try {
+      return stripe.webhooks.constructEvent(body, signature, secret)
+    } catch {
+      // try the next secret
+    }
+  }
+  return null
+}
+
+/**
+ * Idempotency: record each Stripe event id once. Stripe retries events, and when
+ * more than one endpoint targets this deployment every event arrives multiple
+ * times. Without this, a day pass could be minted twice.
+ * Returns false if the event was already processed.
+ */
+async function claimEvent(supabase: ReturnType<typeof getAdminClient>, event: any): Promise<boolean> {
+  const { error } = await supabase
+    .from('stripe_webhook_events')
+    .insert({ event_id: event.id, type: event.type })
+  if (!error) return true
+  if (error.code === '23505') return false // unique violation -> already handled
+  // Table missing or other DB issue: don't drop the event, just process it.
+  console.warn('[webhook] Idempotency check unavailable:', error.message)
+  return true
+}
+
+async function releaseEvent(supabase: ReturnType<typeof getAdminClient>, eventId: string) {
+  // Processing failed: forget the claim so Stripe's retry can process it again.
+  await supabase.from('stripe_webhook_events').delete().eq('event_id', eventId)
+}
+
 export async function POST(request: NextRequest) {
   const body = await request.text()
   const signature = request.headers.get('stripe-signature')
@@ -32,21 +73,20 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Missing signature' }, { status: 400 })
   }
 
-  let event: any
-  try {
-    event = stripe.webhooks.constructEvent(
-      body,
-      signature,
-      process.env.STRIPE_WEBHOOK_SECRET!
-    )
-  } catch (err: any) {
-    console.error('Webhook signature verification failed:', err.message)
+  const event = verifyEvent(body, signature)
+  if (!event) {
+    console.error('Webhook signature verification failed for all configured secrets')
     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 })
   }
 
   const supabase = getAdminClient()
 
-  console.log('STRIPE WEBHOOK:', event.type)
+  console.log('STRIPE WEBHOOK:', event.type, event.id)
+
+  if (!(await claimEvent(supabase, event))) {
+    console.log('[webhook] Duplicate event ignored:', event.id)
+    return NextResponse.json({ received: true, duplicate: true })
+  }
 
   try {
     switch (event.type) {
@@ -241,6 +281,7 @@ export async function POST(request: NextRequest) {
     }
   } catch (err: any) {
     console.error('WEBHOOK HANDLER ERROR:', err.message, err.stack)
+    await releaseEvent(supabase, event.id)
     return NextResponse.json({ error: err.message }, { status: 500 })
   }
 
