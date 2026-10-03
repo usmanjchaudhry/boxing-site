@@ -52,32 +52,33 @@ export default function TrainersPage() {
               key={index} 
               className="group relative bg-zinc-950 border border-zinc-900 rounded-3xl overflow-hidden hover:border-red-900/50 transition-all duration-500 hover:-translate-y-2 hover:shadow-[0_20px_40px_-15px_rgba(220,38,38,0.2)]"
             >
-              {/* Image Container */}
-              <div className="relative aspect-[4/5] w-full overflow-hidden">
-                <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent z-10 opacity-80 group-hover:opacity-60 transition-opacity duration-500" />
+              {/* Image Container — taller on mobile so faces aren't cropped */}
+              <div className="relative aspect-[3/4] sm:aspect-[4/5] w-full overflow-hidden">
+                {/* Subtle bottom gradient only — lets the photo breathe */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent z-10" />
                 <Image 
                   src={trainer.image} 
                   alt={trainer.name}
                   fill
-                  className="object-cover object-top filter grayscale group-hover:grayscale-0 transition-all duration-700 scale-100 group-hover:scale-105"
-                  sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                  className="object-cover object-[center_20%] transition-transform duration-700 group-hover:scale-105"
+                  sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
                 />
                 
-                {/* Overlay Text */}
-                <div className="absolute bottom-0 left-0 right-0 p-6 z-20 transform translate-y-4 group-hover:translate-y-0 transition-transform duration-500">
-                  <p className="text-red-500 font-bold tracking-widest text-xs uppercase mb-2">
+                {/* Text overlay pinned to bottom */}
+                <div className="absolute bottom-0 left-0 right-0 p-5 sm:p-6 z-20">
+                  <p className="text-red-500 font-bold tracking-widest text-[10px] sm:text-xs uppercase mb-1">
                     {trainer.role}
                   </p>
-                  <h3 className="text-2xl sm:text-3xl font-black mb-2">
+                  <h3 className="text-xl sm:text-2xl font-black mb-2">
                     {trainer.name}
                   </h3>
                   
-                  {/* Specialties (Slides up on hover) */}
-                  <div className="grid grid-rows-[0fr] group-hover:grid-rows-[1fr] transition-[grid-template-rows] duration-500 ease-out">
-                    <div className="overflow-hidden">
-                      <div className="flex flex-wrap gap-2 mt-2">
+                  {/* Specialties — always visible on mobile, slide up on desktop hover */}
+                  <div className="sm:grid sm:grid-rows-[0fr] sm:group-hover:grid-rows-[1fr] sm:transition-[grid-template-rows] sm:duration-500 sm:ease-out">
+                    <div className="sm:overflow-hidden">
+                      <div className="flex flex-wrap gap-1.5 sm:gap-2 mt-1">
                         {trainer.specialties.map((spec, i) => (
-                          <span key={i} className="px-3 py-1 bg-red-950/40 border border-red-900/50 text-red-300 text-[10px] uppercase font-bold tracking-wider rounded-full">
+                          <span key={i} className="px-2.5 py-1 bg-red-950/60 border border-red-900/50 text-red-300 text-[10px] uppercase font-bold tracking-wider rounded-full backdrop-blur-sm">
                             {spec}
                           </span>
                         ))}
