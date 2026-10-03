@@ -284,16 +284,7 @@ export default async function DashboardPage() {
             </Link>
           </div>
 
-          {/* Next Class Card */}
-          <div className="p-6 rounded-3xl bg-zinc-950 border border-white/5 relative overflow-hidden group flex flex-col justify-between">
-            <h3 className="text-lg font-semibold mb-4 text-zinc-300 relative z-10">Next Class</h3>
-            <div className="relative z-10">
-              <p className="text-zinc-500 text-sm italic">No upcoming classes booked.</p>
-            </div>
-            <Link href="/schedule" className="mt-6 w-full bg-white/10 hover:bg-white/20 text-white text-sm font-semibold py-3 rounded-xl transition-colors border border-white/5 active:scale-95 block text-center">
-              View Schedule
-            </Link>
-          </div>
+
 
           {/* Passes Cards (If any exist) */}
           {(availablePasses.length > 0 || pastPasses.length > 0) && (
