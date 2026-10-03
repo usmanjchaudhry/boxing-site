@@ -134,6 +134,7 @@ export default async function DashboardPage() {
       .from('waiver_templates')
       .select('id')
       .eq('is_active', true)
+      .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle()
 
@@ -162,6 +163,7 @@ export default async function DashboardPage() {
       .from('waiver_templates')
       .select('id, body_text')
       .eq('is_active', true)
+      .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle()
 

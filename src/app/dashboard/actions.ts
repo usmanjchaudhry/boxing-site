@@ -20,7 +20,7 @@ export async function signWaiver(signatureDataUrl: string, participantId: string
   console.log("WAIVER DEBUG: Parent profile:", profile.id)
 
   console.log("WAIVER DEBUG: Fetching template")
-  const { data: template, error: tplErr } = await supabase.from('waiver_templates').select('id').eq('is_active', true).limit(1).maybeSingle()
+  const { data: template, error: tplErr } = await supabase.from('waiver_templates').select('id').eq('is_active', true).order('created_at', { ascending: false }).limit(1).maybeSingle()
   if (tplErr || !template) {
     console.error("WAIVER DEBUG: Template fetch error:", tplErr)
     throw new Error("No active waiver template found")
