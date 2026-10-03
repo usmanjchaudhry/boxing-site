@@ -3,6 +3,18 @@ import Navbar from '@/components/Navbar'
 
 const trainers = [
   {
+    name: 'Coach Trini',
+    role: 'Coach',
+    image: '/images/coaches/coachTrini.PNG',
+    specialties: ['Pad Work', 'Sparring']
+  },
+  {
+    name: 'Coach Soldier',
+    role: 'Coach',
+    image: '/images/coaches/coachSoldier.PNG',
+    specialties: ['Cardio Boxing', 'Endurance']
+  },
+  {
     name: 'Coach Markos',
     role: 'Head Coach',
     image: '/images/coaches/coachMarkos.PNG',
@@ -13,18 +25,6 @@ const trainers = [
     role: 'Coach',
     image: '/images/coaches/coachSergei.PNG',
     specialties: ['Technical Training', 'Fight Preparation']
-  },
-  {
-    name: 'Coach Soldier',
-    role: 'Coach',
-    image: '/images/coaches/coachSoldier.PNG',
-    specialties: ['Cardio Boxing', 'Endurance']
-  },
-  {
-    name: 'Coach Trini',
-    role: 'Coach',
-    image: '/images/coaches/coachTrini.PNG',
-    specialties: ['Pad Work', 'Sparring']
   }
 ]
 
