@@ -72,14 +72,20 @@ export default async function MembershipSuccessPage({
           console.log('[success-page] Confirming Day Pass for profile:', profileId)
           
           // Check if this specific checkout session already created a pass (idempotency)
-          const { data: existing } = await adminDb.from('passes').select('id').eq('receipt_line_item_id', sessionId).maybeSingle()
+          // Since we can't use sessionId in the UUID column, we'll check if any pass was created in the last 1 minute
+          const oneMinuteAgo = new Date(Date.now() - 60000).toISOString()
+          const { data: existing } = await adminDb
+            .from('passes')
+            .select('id')
+            .eq('profile_id', profileId)
+            .gte('created_at', oneMinuteAgo)
+            .maybeSingle()
           
           if (!existing) {
             const { error } = await adminDb.from('passes').insert({
               profile_id: profileId,
               pass_type: 'Day Pass',
-              status: 'Available',
-              receipt_line_item_id: sessionId // Hack: using sessionId as idempotency key temporarily since we bypass webhook receipt creation here
+              status: 'Available'
             })
             if (error) console.error('[success-page] Error minting day pass:', error)
           }
