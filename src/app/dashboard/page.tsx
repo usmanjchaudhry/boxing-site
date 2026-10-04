@@ -121,7 +121,13 @@ export default async function DashboardPage() {
   // Our DB keeps one subscription per household, so only Stripe knows about the extra one.
   let billingSubscriptions: BillingSubscription[] = []
   if (householdId) {
-    const { data: household } = await supabase
+    // Service-role read: householdId was resolved from the signed-in user's own membership above.
+    const { createClient: createAdminClient } = await import('@supabase/supabase-js')
+    const billingDb = createAdminClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    )
+    const { data: household } = await billingDb
       .from('households')
       .select('stripe_customer_id')
       .eq('id', householdId)

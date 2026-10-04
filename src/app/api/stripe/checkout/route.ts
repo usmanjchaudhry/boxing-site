@@ -90,12 +90,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Household not found' }, { status: 404 })
     }
 
-    // 3. Check if household already has a Stripe customer
-    const { data: household } = await supabase
+    // 3. Check if household already has a Stripe customer.
+    // Service-role client: billing identifiers are server-managed. Using the user's
+    // client here depended on RLS UPDATE policies; when those blocked the write
+    // (silently, no error), every checkout created a brand-new Stripe customer.
+    const billingDb = createSupabaseClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    )
+    const { data: household, error: householdErr } = await billingDb
       .from('households')
       .select('stripe_customer_id')
       .eq('id', householdMember.household_id)
       .single()
+    if (householdErr) {
+      return NextResponse.json({ error: 'Household not found' }, { status: 404 })
+    }
 
     let stripeCustomerId = household?.stripe_customer_id
 
@@ -113,10 +123,13 @@ export async function POST(request: NextRequest) {
       stripeCustomerId = customer.id
 
       // Save to household
-      await supabase
+      const { error: saveErr } = await billingDb
         .from('households')
         .update({ stripe_customer_id: stripeCustomerId })
         .eq('id', householdMember.household_id)
+      if (saveErr) {
+        console.error('[checkout] Failed to save stripe_customer_id:', householdMember.household_id, saveErr.message)
+      }
     }
 
     // 4. Create a Stripe Checkout Session
