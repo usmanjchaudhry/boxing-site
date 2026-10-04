@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/utils/supabase/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
+import { DEFAULT_TIMEZONE, startOfTodayIn } from '@/utils/timezone'
 
 function getAdminSupabase() {
   return createAdminClient(
@@ -39,10 +40,9 @@ export async function GET(request: NextRequest) {
 
   const db = getAdminSupabase()
 
-  // Get today's date range
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const todayISO = today.toISOString()
+  // Today's range in the gym's timezone (servers run in UTC)
+  const { data: facility } = await db.from('facilities').select('timezone').limit(1).maybeSingle()
+  const todayISO = startOfTodayIn(facility?.timezone || DEFAULT_TIMEZONE).toISOString()
 
   // Parallel queries for performance
   const [

@@ -1,9 +1,10 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Users, CreditCard, ScanLine, ShieldCheck, RefreshCw, Banknote, Loader2, Search, BarChart3 } from 'lucide-react'
+import { Users, CreditCard, ScanLine, ShieldCheck, RefreshCw, Banknote, Loader2, Search, BarChart3, ClipboardList } from 'lucide-react'
 import CheckinScanner from '@/components/CheckinScanner'
 import ReportsTab from '@/components/ReportsTab'
+import CheckinsLogTab from '@/components/CheckinsLogTab'
 import { freezeSubscription, unfreezeSubscription, cancelSubscription } from './actions'
 
 interface Stats {
@@ -47,7 +48,7 @@ interface Member {
   hasAuth: boolean
 }
 
-type Tab = 'overview' | 'checkin' | 'payments' | 'members' | 'cash' | 'reports'
+type Tab = 'overview' | 'checkin' | 'checkins' | 'payments' | 'members' | 'cash' | 'reports'
 
 interface Plan {
   id: string
@@ -181,6 +182,7 @@ export default function AdminDashboardClient({ role }: { role: string }) {
     { id: 'overview', label: 'Overview', icon: ShieldCheck },
     { id: 'reports', label: 'Reports', icon: BarChart3, adminOnly: true },
     { id: 'checkin', label: 'Check-in Scanner', icon: ScanLine },
+    { id: 'checkins', label: 'Check-ins', icon: ClipboardList },
     { id: 'cash', label: 'Cash Payments', icon: Banknote, adminOnly: true },
     { id: 'payments', label: 'Stripe Payments', icon: CreditCard, adminOnly: true },
     { id: 'members', label: 'Members', icon: Users },
@@ -258,8 +260,16 @@ export default function AdminDashboardClient({ role }: { role: string }) {
 
           {/* Recent Check-ins Table */}
           <div className="rounded-2xl bg-zinc-950 border border-white/5 overflow-hidden">
-            <div className="p-4 sm:p-6 border-b border-white/5">
+            <div className="p-4 sm:p-6 border-b border-white/5 flex items-center justify-between gap-3">
               <h3 className="text-lg font-bold">Recent Check-ins</h3>
+              <button
+                id="overview-view-all-checkins"
+                type="button"
+                onClick={() => setActiveTab('checkins')}
+                className="text-xs font-semibold text-zinc-400 hover:text-white transition-colors"
+              >
+                View all →
+              </button>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -321,6 +331,9 @@ export default function AdminDashboardClient({ role }: { role: string }) {
           <CheckinScanner />
         </div>
       )}
+
+      {/* CHECK-INS LOG TAB */}
+      {activeTab === 'checkins' && <CheckinsLogTab />}
 
       {/* PAYMENTS TAB */}
       {activeTab === 'payments' && (

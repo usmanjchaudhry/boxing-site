@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { CheckinMethod, CheckinResult } from '@/utils/checkin-code'
+import { DEFAULT_TIMEZONE, startOfTodayIn } from '@/utils/timezone'
 
 /**
  * Check-in domain service.
@@ -15,8 +16,6 @@ import type { CheckinMethod, CheckinResult } from '@/utils/checkin-code'
  * A purchased day pass is an explicit intent to use it, so it wins over a membership.
  */
 
-const DEFAULT_TIMEZONE = 'America/Los_Angeles'
-
 /** Values allowed by the gym_checkins.status_flag CHECK constraint. */
 type LoggedFlag = 'Success' | 'Waiver Expired' | 'Payment Due' | 'No Active Pass'
 
@@ -30,30 +29,6 @@ const NO_ACCESS: Denied = {
   displayFlag: 'No Active Pass',
   loggedFlag: 'No Active Pass',
   message: 'No active membership or day pass found.',
-}
-
-/** Wall-clock parts of `date` as seen in `timeZone`. */
-function zonedParts(date: Date, timeZone: string) {
-  const p = Object.fromEntries(
-    new Intl.DateTimeFormat('en-US', {
-      timeZone, hourCycle: 'h23',
-      year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit',
-    }).formatToParts(date).map(x => [x.type, x.value])
-  )
-  return { y: +p.year, m: +p.month, d: +p.day, h: +p.hour, min: +p.minute, s: +p.second }
-}
-
-/**
- * UTC instant of local midnight "today" in the given IANA timezone.
- * Vercel servers run in UTC, so `setHours(0,0,0,0)` would reset the
- * daily limit at 5 PM Pacific instead of midnight.
- */
-function startOfTodayIn(timeZone: string): Date {
-  const today = zonedParts(new Date(), timeZone)
-  const guess = Date.UTC(today.y, today.m - 1, today.d)
-  const seen = zonedParts(new Date(guess), timeZone)
-  const offsetMs = Date.UTC(seen.y, seen.m - 1, seen.d, seen.h, seen.min, seen.s) - guess
-  return new Date(guess - offsetMs)
 }
 
 /**
