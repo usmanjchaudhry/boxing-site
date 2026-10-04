@@ -89,7 +89,11 @@ export default function DateOfBirthInput({
     }
   }
 
-  const pad = (v: string, set: (s: string) => void) => { if (v.length === 1 && v !== '0') set(v.padStart(2, '0')) }
+  // Pad "4" -> "04" when leaving a box. Functional update on purpose: auto-advance moves
+  // focus inside onChange, so blur fires before re-render and a captured value would be
+  // one keystroke stale ("19" was being padded from the stale "1" into "01").
+  const pad = (set: React.Dispatch<React.SetStateAction<string>>) =>
+    set(v => (v.length === 1 && v !== '0' ? v.padStart(2, '0') : v))
 
   const msgId = `${uid}-msg`
   const box = `${inputClassName} text-center tabular-nums tracking-wider placeholder:text-zinc-600`
@@ -121,7 +125,7 @@ export default function DateOfBirthInput({
               // Advance once the month is unambiguous: "2"–"9" or two digits
               if (v.length === 2 || (v.length === 1 && Number(v) > 1)) dayRef.current?.focus()
             }}
-            onBlur={() => pad(month, setMonth)}
+            onBlur={() => pad(setMonth)}
             className={box}
           />
         </div>
@@ -147,7 +151,7 @@ export default function DateOfBirthInput({
               setDay(v)
               if (v.length === 2 || (v.length === 1 && Number(v) > 3)) yearRef.current?.focus()
             }}
-            onBlur={() => pad(day, setDay)}
+            onBlur={() => pad(setDay)}
             className={box}
           />
         </div>
