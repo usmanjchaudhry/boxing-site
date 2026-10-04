@@ -48,6 +48,8 @@ function classify(result: CheckinResult): { tone: Tone; staffAction?: string } {
       return { tone: 'error', staffAction: 'Unfreeze the membership in Admin \u2192 Members, or offer a day pass.' }
     case 'Membership Cancelled':
       return { tone: 'error', staffAction: 'Offer to re-subscribe, record a cash payment, or sell a day pass.' }
+    case 'Day Pass Used':
+      return { tone: 'error', staffAction: 'A day pass is one entry. They need another day pass or a membership.' }
     default:
       return { tone: 'error', staffAction: result.status === 'denied' ? 'Offer a day pass or a membership.' : undefined }
   }

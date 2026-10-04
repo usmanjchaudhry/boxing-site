@@ -10,10 +10,11 @@ import { DEFAULT_TIMEZONE, startOfTodayIn } from '@/utils/timezone'
  * API route stays a thin HTTP adapter.
  *
  * Access priority:
- *   1. A day pass already used today  -> covers the rest of today (no new pass burned)
- *   2. An unused day pass             -> used up on this scan
- *   3. The household membership       -> normal plan rules (status, daily limit, etc.)
+ *   1. An unused day pass       -> used up on this scan (one pass = one entry)
+ *   2. The household membership -> normal plan rules (status, daily limit, etc.)
  * A purchased day pass is an explicit intent to use it, so it wins over a membership.
+ * A pass is never reused: scanning again after it's used needs another pass or a
+ * membership, otherwise staff see "Day Pass Used".
  */
 
 /** Values allowed by the gym_checkins.status_flag CHECK constraint. */
@@ -31,29 +32,23 @@ const NO_ACCESS: Denied = {
   message: 'No active membership or day pass found.',
 }
 
-/**
- * Day pass access. Returns null when the member has no usable pass.
- * A pass used earlier today keeps covering today, so a second scan the same
- * day doesn't burn another pass (or wrongly fall back to the membership).
- */
-async function findDayPassAccess(
-  db: SupabaseClient,
-  profileId: string,
-  startOfToday: Date
-): Promise<Granted | null> {
-  const { data: usedToday } = await db
+/** When this person last got in on a day pass today, or null. */
+async function dayPassUsedTodayAt(db: SupabaseClient, profileId: string, startOfToday: Date): Promise<Date | null> {
+  const { data } = await db
     .from('gym_checkins')
-    .select('pass_id')
+    .select('scanned_at')
     .eq('profile_id', profileId)
     .eq('status_flag', 'Success')
     .not('pass_id', 'is', null)
     .gte('scanned_at', startOfToday.toISOString())
+    .order('scanned_at', { ascending: false })
     .limit(1)
     .maybeSingle()
-  if (usedToday?.pass_id) {
-    return { granted: true, planName: 'Day Pass', passIdForLog: usedToday.pass_id }
-  }
+  return data?.scanned_at ? new Date(data.scanned_at) : null
+}
 
+/** Unused day pass access (oldest first). Returns null when the member has none. */
+async function findDayPassAccess(db: SupabaseClient, profileId: string): Promise<Granted | null> {
   // Oldest unused, unexpired pass first
   const { data: pass } = await db
     .from('passes')
@@ -179,10 +174,14 @@ async function evaluateMembership(
   return { granted: true, planName: plan?.name ?? '' }
 }
 
+/** How many times to re-decide when another scan claims the same pass first. */
+const MAX_CLAIM_ATTEMPTS = 3
+
 export async function processCheckin(
   db: SupabaseClient,
   profileId: string,
-  method: CheckinMethod
+  method: CheckinMethod,
+  attempt = 1
 ): Promise<{ httpStatus: number; body: CheckinResult }> {
   const { data: facility } = await db
     .from('facilities')
@@ -220,10 +219,25 @@ export async function processCheckin(
   }
 
   // 2. Access: day pass first, then membership
-  const startOfToday = startOfTodayIn(facility?.timezone || DEFAULT_TIMEZONE)
-  const access =
-    (await findDayPassAccess(db, profileId, startOfToday)) ??
+  const timeZone = facility?.timezone || DEFAULT_TIMEZONE
+  const startOfToday = startOfTodayIn(timeZone)
+  let access =
+    (await findDayPassAccess(db, profileId)) ??
     (await evaluateMembership(db, profileId, startOfToday))
+
+  // Denied after already using a day pass today: say so, so staff know why
+  if (!access.granted) {
+    const usedAt = await dayPassUsedTodayAt(db, profileId, startOfToday)
+    if (usedAt) {
+      const time = usedAt.toLocaleTimeString('en-US', { timeZone, hour: 'numeric', minute: '2-digit' })
+      const membershipNote = access.displayFlag !== 'No Active Pass' ? ` (${access.displayFlag})` : ''
+      access = {
+        ...access,
+        displayFlag: 'Day Pass Used',
+        message: `Their day pass was already used today at ${time}. A day pass is good for one entry${membershipNote}.`,
+      }
+    }
+  }
 
   if (!access.granted) {
     await log(access.loggedFlag)
@@ -254,15 +268,31 @@ export async function processCheckin(
     }
   }
 
-  // 4. Consume a new day pass (only once access is fully granted).
-  //    The status guard makes this safe if two scans race for the same pass.
+  // 4. Consume the day pass (only once access is fully granted).
+  //    The status guard makes the claim atomic: if two scans race for the same
+  //    pass, only one claims it and the other re-decides (next pass, membership,
+  //    or "Day Pass Used"), so one pass can never let two scans in.
   if (access.passIdToConsume) {
-    const { error } = await db
+    const { data: claimed, error } = await db
       .from('passes')
       .update({ status: 'Consumed', updated_at: new Date().toISOString() })
       .eq('id', access.passIdToConsume)
       .eq('status', 'Available')
-    if (error) console.error('[checkin] Failed to consume pass:', error.message)
+      .select('id')
+    if (error) {
+      console.error('[checkin] Failed to consume pass:', error.message)
+      return {
+        httpStatus: 500,
+        body: { status: 'error', flag: 'Error', message: 'Could not use the day pass. Please scan again.' },
+      }
+    }
+    if (!claimed || claimed.length === 0) {
+      if (attempt < MAX_CLAIM_ATTEMPTS) return processCheckin(db, profileId, method, attempt + 1)
+      return {
+        httpStatus: 409,
+        body: { status: 'error', flag: 'Error', message: 'That day pass was just used. Please scan again.' },
+      }
+    }
   }
 
   await log('Success', access.passIdForLog)

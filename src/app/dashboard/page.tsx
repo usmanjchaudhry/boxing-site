@@ -11,7 +11,7 @@ import MemberQRCode from '@/components/MemberQRCode'
 import TicketCard from '@/components/TicketCard'
 import DuplicateSubscriptionAlert from '@/components/DuplicateSubscriptionAlert'
 import { getBillingSubscriptions, type BillingSubscription } from '@/utils/stripe-duplicates'
-import PassStatusWatcher from '@/components/PassStatusWatcher'
+import DashboardLiveSync from '@/components/DashboardLiveSync'
 import { getServiceClient } from '@/utils/auth/staff'
 
 export default async function DashboardPage() {
@@ -330,8 +330,13 @@ export default async function DashboardPage() {
 
 
 
-          {/* Live-updates tickets when one is used at the front desk */}
-          <PassStatusWatcher availableIds={availablePasses.map(p => p.id)} />
+          {/* Live-updates tickets and membership status when they change elsewhere */}
+          <DashboardLiveSync
+            initial={{
+              availablePassIds: availablePasses.map(p => p.id).sort(),
+              membershipStatus: subscription?.status ?? null,
+            }}
+          />
 
           {/* Passes Cards (If any exist) */}
           {(availablePasses.length > 0 || pastPasses.length > 0) && (
