@@ -1,10 +1,13 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Users, CreditCard, ScanLine, ShieldCheck, RefreshCw, Banknote, Loader2, Search, BarChart3, ClipboardList } from 'lucide-react'
+import { ShieldCheck, RefreshCw, Banknote, Loader2, Search, BookOpen } from 'lucide-react'
 import CheckinScanner from '@/components/CheckinScanner'
 import ReportsTab from '@/components/ReportsTab'
 import CheckinsLogTab from '@/components/CheckinsLogTab'
+import UserGuideTab from '@/components/user-guide/UserGuideTab'
+import type { GuideFacts } from '@/utils/user-guide-facts'
+import { tabsForRole, type AdminTab, type StaffRole } from './admin-tabs'
 import { freezeSubscription, unfreezeSubscription, cancelSubscription } from './actions'
 
 interface Stats {
@@ -48,7 +51,7 @@ interface Member {
   hasAuth: boolean
 }
 
-type Tab = 'overview' | 'checkin' | 'checkins' | 'payments' | 'members' | 'cash' | 'reports'
+type Tab = AdminTab
 
 interface Plan {
   id: string
@@ -57,7 +60,7 @@ interface Plan {
   billing_interval: string
 }
 
-export default function AdminDashboardClient({ role }: { role: string }) {
+export default function AdminDashboardClient({ role, guideFacts }: { role: string; guideFacts: GuideFacts }) {
   const [activeTab, setActiveTab] = useState<Tab>('overview')
   const [stats, setStats] = useState<Stats | null>(null)
   const [checkins, setCheckins] = useState<CheckinEntry[]>([])
@@ -178,17 +181,13 @@ export default function AdminDashboardClient({ role }: { role: string }) {
     }
   }, [activeTab, payments.length, members.length, plans.length, fetchPayments, fetchMembers])
 
-  const tabs: { id: Tab; label: string; icon: any; adminOnly?: boolean }[] = [
-    { id: 'overview', label: 'Overview', icon: ShieldCheck },
-    { id: 'reports', label: 'Reports', icon: BarChart3, adminOnly: true },
-    { id: 'checkin', label: 'Check-in Scanner', icon: ScanLine },
-    { id: 'checkins', label: 'Check-ins', icon: ClipboardList },
-    { id: 'cash', label: 'Cash Payments', icon: Banknote, adminOnly: true },
-    { id: 'payments', label: 'Stripe Payments', icon: CreditCard, adminOnly: true },
-    { id: 'members', label: 'Members', icon: Users },
-  ]
+  const visibleTabs = tabsForRole(role)
 
-  const visibleTabs = tabs.filter(t => !t.adminOnly || role === 'admin')
+  // Opening a tab from the guide should land at the top of that tab
+  const goToTab = (tab: Tab) => {
+    setActiveTab(tab)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
 
   return (
     <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
@@ -202,14 +201,24 @@ export default function AdminDashboardClient({ role }: { role: string }) {
             Last updated: {lastRefresh.toLocaleTimeString()}
           </p>
         </div>
-        <button
-          onClick={refreshAll}
-          disabled={loading}
-          className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-sm font-medium hover:bg-white/10 transition-colors disabled:opacity-50"
-        >
-          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-          Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            id="admin-open-guide"
+            onClick={() => goToTab('guide')}
+            className="flex items-center gap-2 px-4 py-2 bg-red-500/10 border border-red-500/30 text-red-300 rounded-xl text-sm font-medium hover:bg-red-500/20 hover:text-white transition-colors"
+          >
+            <BookOpen className="w-4 h-4" />
+            Help
+          </button>
+          <button
+            onClick={refreshAll}
+            disabled={loading}
+            className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-sm font-medium hover:bg-white/10 transition-colors disabled:opacity-50"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
+        </div>
       </div>
 
       {/* Tabs */}
@@ -334,6 +343,11 @@ export default function AdminDashboardClient({ role }: { role: string }) {
 
       {/* CHECK-INS LOG TAB */}
       {activeTab === 'checkins' && <CheckinsLogTab />}
+
+      {/* USER'S GUIDE TAB */}
+      {activeTab === 'guide' && (
+        <UserGuideTab role={(role === 'admin' ? 'admin' : 'staff') as StaffRole} facts={guideFacts} onNavigate={goToTab} />
+      )}
 
       {/* PAYMENTS TAB */}
       {activeTab === 'payments' && (
@@ -509,7 +523,8 @@ export default function AdminDashboardClient({ role }: { role: string }) {
                       }
                     </td>
                     <td className="px-4 sm:px-6 py-3">
-                      {m.householdRole === 'Primary' && m.subscriptionStatus !== 'None' && m.householdId && (
+                      {/* Freeze/cancel are admin-only on the server, so only admins see the buttons */}
+                      {role === 'admin' && m.householdRole === 'Primary' && m.subscriptionStatus !== 'None' && m.householdId && (
                         <div className="flex items-center gap-2">
                           {m.subscriptionStatus === 'Active' && (
                             <>

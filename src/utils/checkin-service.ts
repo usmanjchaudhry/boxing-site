@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { CheckinMethod, CheckinResult } from '@/utils/checkin-code'
 import { DEFAULT_TIMEZONE, startOfTodayIn } from '@/utils/timezone'
+import { effectiveDailyLimit } from '@/utils/plan-rules'
 
 /**
  * Check-in domain service.
@@ -140,8 +141,7 @@ async function evaluateMembership(
     return { ...NO_ACCESS, message: `${plan.name} only covers the primary account holder.` }
   }
 
-  const effectiveLimit: number | null =
-    plan?.max_daily_checkins ?? (plan?.max_dependents != null ? plan.max_dependents + 1 : null)
+  const effectiveLimit = effectiveDailyLimit(plan)
 
   if (effectiveLimit != null) {
     const { data: members } = await db

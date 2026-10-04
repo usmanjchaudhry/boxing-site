@@ -8,15 +8,16 @@ import {
 import { useBarcodeScanner } from '@/hooks/useBarcodeScanner'
 import { extractProfileId, type CheckinMethod, type CheckinResult } from '@/utils/checkin-code'
 import { feedbackSounds, unlockAudio, isAudioUnlocked } from '@/utils/feedback-sounds'
+import { classify, type CheckinTone } from '@/utils/checkin-feedback'
 
 /* ────────────────────────────────────────────────────────────
  * Config
  * ──────────────────────────────────────────────────────────── */
-const AUTO_RESET_MS = { success: 4000, warning: 9000, error: 9000 } as const
+const AUTO_RESET_MS: Record<CheckinTone, number> = { success: 4000, warning: 9000, error: 9000 }
 const SAME_CODE_COOLDOWN_MS = 3000 // scanners can read the same screen twice in a row
 const RECENT_LIMIT = 8
 
-type Tone = keyof typeof AUTO_RESET_MS
+type Tone = CheckinTone
 
 interface ScanEntry {
   id: number
@@ -30,29 +31,6 @@ interface MemberOption {
   name: string
   householdRole: string
   subscriptionStatus: string
-}
-
-/** Map a result to a visual/aural tone and a next step for the staff member. */
-function classify(result: CheckinResult): { tone: Tone; staffAction?: string } {
-  if (result.status === 'allowed') return { tone: 'success' }
-  switch (result.flag) {
-    case 'Waiver Required':
-      return { tone: 'warning', staffAction: 'Have them open the app and sign the waiver, then scan again.' }
-    case 'Payment Due':
-      return { tone: 'warning', staffAction: 'Ask them to tap "Update Payment" on their dashboard.' }
-    case 'Membership Expired':
-      return { tone: 'warning', staffAction: 'Offer a renewal or record a cash payment in Admin.' }
-    case 'Daily Limit Reached':
-      return { tone: 'warning', staffAction: 'Their plan has used today\u2019s household check-ins. Offer a day pass.' }
-    case 'Membership Frozen':
-      return { tone: 'error', staffAction: 'Unfreeze the membership in Admin \u2192 Members, or offer a day pass.' }
-    case 'Membership Cancelled':
-      return { tone: 'error', staffAction: 'Offer to re-subscribe, record a cash payment, or sell a day pass.' }
-    case 'Day Pass Used':
-      return { tone: 'error', staffAction: 'A day pass is one entry. They need another day pass or a membership.' }
-    default:
-      return { tone: 'error', staffAction: result.status === 'denied' ? 'Offer a day pass or a membership.' : undefined }
-  }
 }
 
 const TONE_STYLES: Record<Tone, { panel: string; ring: string; icon: string; pill: string; bar: string; Icon: typeof CheckCircle2 }> = {

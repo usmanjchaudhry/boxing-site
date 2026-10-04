@@ -5,9 +5,10 @@ import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
+import { LEGACY_ACCESS_CODE, LEGACY_ACCESS_MAX_AGE_SECONDS } from '@/utils/legacy-access'
 
 export async function checkLegacyPassword(password: string) {
-  if (password !== 'deathbeforedishonor') {
+  if (password.trim().toLowerCase() !== LEGACY_ACCESS_CODE) {
     return { error: 'Invalid password' }
   }
 
@@ -16,7 +17,7 @@ export async function checkLegacyPassword(password: string) {
   cookieStore.set('legacy_access', 'granted', {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    maxAge: 60 * 60, // 1 hour
+    maxAge: LEGACY_ACCESS_MAX_AGE_SECONDS,
     path: '/'
   })
 

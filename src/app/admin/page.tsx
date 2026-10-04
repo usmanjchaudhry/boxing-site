@@ -5,6 +5,7 @@ import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { redirect } from 'next/navigation'
 import Navbar from '@/components/Navbar'
 import AdminDashboardClient from './AdminDashboardClient'
+import { getGuideFacts } from '@/utils/user-guide-facts'
 
 export default async function AdminPage() {
   const supabase = await createClient()
@@ -27,10 +28,14 @@ export default async function AdminPage() {
     redirect('/dashboard')
   }
 
+  // Live prices + the Legacy code for the User's Guide. Loaded here (server, staff-only)
+  // so the code is never part of a public JavaScript file.
+  const guideFacts = await getGuideFacts(adminDb)
+
   return (
     <div className="min-h-screen bg-black text-white font-sans selection:bg-red-500 selection:text-white">
       <Navbar />
-      <AdminDashboardClient role={profile.role} />
+      <AdminDashboardClient role={profile.role} guideFacts={guideFacts} />
     </div>
   )
 }

@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import Navbar from '@/components/Navbar'
 import PlanCard from '@/components/PlanCard'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
+import { LEGACY_PLAN_NAME } from '@/utils/legacy-access'
 
 export const dynamic = 'force-dynamic'
 
@@ -25,7 +26,7 @@ export default async function ClassifiedPage() {
   const { data: plan } = await supabaseAdmin
     .from('membership_plans')
     .select('*')
-    .eq('name', 'Legacy Unlimited')
+    .eq('name', LEGACY_PLAN_NAME)
     .order('created_at', { ascending: true })
     .limit(1)
     .maybeSingle()

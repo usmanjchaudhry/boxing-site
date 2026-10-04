@@ -41,7 +41,7 @@ export default function PassCard({ pass, recipients = [] }: { pass: any; recipie
           <span className="text-4xl font-black text-white">${price}</span>
           <span className="text-zinc-500 text-sm mb-1">/pass</span>
         </div>
-        <p className="text-zinc-500 text-sm mb-6">Valid for one full day of gym access. Does not automatically renew.</p>
+        <p className="text-zinc-500 text-sm mb-6">Good for one gym visit (one check-in). Does not automatically renew.</p>
 
         {showPicker && (
           <div className="mb-5">
