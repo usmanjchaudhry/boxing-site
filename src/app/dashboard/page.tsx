@@ -11,6 +11,8 @@ import MemberQRCode from '@/components/MemberQRCode'
 import TicketCard from '@/components/TicketCard'
 import DuplicateSubscriptionAlert from '@/components/DuplicateSubscriptionAlert'
 import { getBillingSubscriptions, type BillingSubscription } from '@/utils/stripe-duplicates'
+import PassStatusWatcher from '@/components/PassStatusWatcher'
+import { getServiceClient } from '@/utils/auth/staff'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -144,7 +146,10 @@ export default async function DashboardPage() {
   if (householdMembers.length > 0) {
     const profileIds = householdMembers.map(m => m.profile?.id).filter(Boolean)
     if (profileIds.length > 0) {
-      const { data: passes } = await supabase
+      // Service role, scoped to this household's own profile ids: the passes RLS
+      // policy only exposes the signed-in user's own passes, which would hide
+      // day passes bought for family members.
+      const { data: passes } = await getServiceClient()
         .from('passes')
         .select('id, pass_type, status, created_at, updated_at, profile_id')
         .in('profile_id', profileIds)
@@ -324,6 +329,9 @@ export default async function DashboardPage() {
           </div>
 
 
+
+          {/* Live-updates tickets when one is used at the front desk */}
+          <PassStatusWatcher availableIds={availablePasses.map(p => p.id)} />
 
           {/* Passes Cards (If any exist) */}
           {(availablePasses.length > 0 || pastPasses.length > 0) && (

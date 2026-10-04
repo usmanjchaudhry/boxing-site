@@ -54,6 +54,18 @@ export async function isInHousehold(db: SupabaseClient, householdId: string, pro
   return !!data
 }
 
+/** Ids of unused passes for everyone in the signed-in user's household. */
+export async function getAvailablePassIds(db: SupabaseClient, authUserId: string): Promise<string[]> {
+  const ids = (await getPassRecipients(db, authUserId)).map(r => r.id)
+  if (ids.length === 0) return []
+  const { data } = await db
+    .from('passes')
+    .select('id')
+    .in('profile_id', ids)
+    .eq('status', 'Available')
+  return (data ?? []).map(p => p.id)
+}
+
 function fullName(p: { first_name: string | null; last_name: string | null }) {
   return `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim() || 'Member'
 }
