@@ -69,7 +69,7 @@ export default async function DevPage() {
           {/* Dev Membership */}
           {devPlan && (
             <div className="relative">
-              <div className="absolute -inset-1 bg-gradient-to-r from-green-600 to-zinc-800 rounded-[2rem] blur-xl opacity-20 animate-pulse" />
+              <div className="absolute -inset-1 bg-gradient-to-r from-green-600 to-zinc-800 rounded-[2rem] blur-xl opacity-20 animate-pulse pointer-events-none" />
               <PlanCard
                 plan={devPlan}
                 isCurrentPlan={false}
@@ -80,7 +80,7 @@ export default async function DevPage() {
           {/* Dev Double Membership */}
           {devDoublePlan && (
             <div className="relative">
-              <div className="absolute -inset-1 bg-gradient-to-r from-green-600 to-zinc-800 rounded-[2rem] blur-xl opacity-20 animate-pulse" />
+              <div className="absolute -inset-1 bg-gradient-to-r from-green-600 to-zinc-800 rounded-[2rem] blur-xl opacity-20 animate-pulse pointer-events-none" />
               <PlanCard
                 plan={devDoublePlan}
                 isCurrentPlan={false}
@@ -91,7 +91,7 @@ export default async function DevPage() {
           {/* Dev Day Pass */}
           {devPass && (
             <div className="relative">
-              <div className="absolute -inset-1 bg-gradient-to-r from-green-600 to-zinc-800 rounded-[2rem] blur-xl opacity-20 animate-pulse" />
+              <div className="absolute -inset-1 bg-gradient-to-r from-green-600 to-zinc-800 rounded-[2rem] blur-xl opacity-20 animate-pulse pointer-events-none" />
               <PassCard pass={devPass} />
             </div>
           )}

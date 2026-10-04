@@ -56,7 +56,7 @@ export default async function ClassifiedPage() {
         {/* Plans Grid (Just the one secret plan) */}
         <div className="flex justify-center mb-16">
           <div className="w-full max-w-md relative">
-             <div className="absolute -inset-1 bg-gradient-to-r from-red-600 to-zinc-800 rounded-[2rem] blur-xl opacity-20 animate-pulse"></div>
+             <div className="absolute -inset-1 bg-gradient-to-r from-red-600 to-zinc-800 rounded-[2rem] blur-xl opacity-20 animate-pulse pointer-events-none"></div>
             <PlanCard
               plan={plan}
               isCurrentPlan={false}

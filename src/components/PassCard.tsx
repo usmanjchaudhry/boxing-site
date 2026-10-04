@@ -29,7 +29,7 @@ export default function PassCard({ pass }: { pass: any }) {
   }
 
   return (
-    <div className="p-6 rounded-3xl border bg-zinc-950 border-white/10 flex flex-col justify-between hover:border-white/30 transition-all duration-300">
+    <div className="relative p-6 rounded-3xl border bg-zinc-950 border-white/10 flex flex-col justify-between hover:border-white/30 transition-all duration-300">
       <div>
         <h3 className="text-lg font-bold mb-1 text-white">{pass.name}</h3>
         <div className="flex items-end gap-1 mb-4">
