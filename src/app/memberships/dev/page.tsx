@@ -7,6 +7,7 @@ import PlanCard from '@/components/PlanCard'
 import PassCard from '@/components/PassCard'
 import { createClient } from '@/utils/supabase/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
+import { getPassRecipients } from '@/utils/household-members'
 
 export default async function DevPage() {
   // Check cookie
@@ -50,6 +51,9 @@ export default async function DevPage() {
     .limit(1)
     .maybeSingle()
 
+  // Household members the day pass can be bought for
+  const passRecipients = await getPassRecipients(adminDb, user.id)
+
   return (
     <div className="min-h-screen bg-black text-white font-sans selection:bg-green-500 selection:text-white">
       <Navbar />
@@ -92,7 +96,7 @@ export default async function DevPage() {
           {devPass && (
             <div className="relative">
               <div className="absolute -inset-1 bg-gradient-to-r from-green-600 to-zinc-800 rounded-[2rem] blur-xl opacity-20 animate-pulse pointer-events-none" />
-              <PassCard pass={devPass} />
+              <PassCard pass={devPass} recipients={passRecipients} />
             </div>
           )}
         </div>

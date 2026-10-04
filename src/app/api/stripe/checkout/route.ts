@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { stripe } from '@/utils/stripe/server'
 import { createClient } from '@/utils/supabase/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
+import { isInHousehold } from '@/utils/household-members'
 
 /** The only account allowed to buy hidden test products (matches /memberships/dev). */
 const DEV_ACCOUNT_EMAIL = 'usmanjc98@gmail.com'
@@ -14,7 +15,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
     }
 
-    const { planId, productId } = await request.json()
+    const { planId, productId, forProfileId } = await request.json()
     if (!planId && !productId) {
       return NextResponse.json({ error: 'Missing planId or productId' }, { status: 400 })
     }
@@ -117,6 +118,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Household not found' }, { status: 404 })
     }
 
+    // Who the day pass is for. Defaults to the buyer; a family member can be
+    // chosen, but only someone in the buyer's own household. Checked before any
+    // Stripe customer is created.
+    let passOwnerId = profile.id
+    if (productId && typeof forProfileId === 'string' && forProfileId && forProfileId !== profile.id) {
+      if (!(await isInHousehold(billingDb, householdMember.household_id, forProfileId))) {
+        return NextResponse.json({ error: 'That person is not in your household.' }, { status: 403 })
+      }
+      passOwnerId = forProfileId
+    }
+
     let stripeCustomerId = household?.stripe_customer_id
 
     if (!stripeCustomerId) {
@@ -151,7 +163,8 @@ export async function POST(request: NextRequest) {
       cancel_url: `${returnOrigin}/memberships/cancel`,
       metadata: {
         household_id: householdMember.household_id,
-        profile_id: profile.id, // Need this to mint the day pass to the specific person!
+        profile_id: passOwnerId, // Who the day pass is minted to (buyer or a family member)
+        buyer_profile_id: profile.id,
         ...meta
       }
     }

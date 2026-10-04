@@ -9,6 +9,8 @@ import LegacyModal from '@/components/LegacyModal'
 import DevModal from '@/components/DevModal'
 
 import { syncSubscriptionWithStripe } from '@/utils/stripe-sync'
+import { getServiceClient } from '@/utils/auth/staff'
+import { getPassRecipients } from '@/utils/household-members'
 
 export default async function MembershipsPage() {
   const supabase = await createClient()
@@ -67,6 +69,11 @@ export default async function MembershipsPage() {
     .in('category', ['DayPass'])
     .order('price_cents', { ascending: true })
 
+  // Household members a day pass can be bought for (only fetched when passes are on sale)
+  const passRecipients = passes && passes.length > 0
+    ? await getPassRecipients(getServiceClient(), user.id)
+    : []
+
   return (
     <div className="min-h-screen bg-black text-white font-sans selection:bg-red-500 selection:text-white">
       <Navbar />
@@ -112,7 +119,7 @@ export default async function MembershipsPage() {
             
             <div className="grid grid-cols-1 max-w-md mx-auto gap-4 sm:gap-6">
               {passes.map((pass) => (
-                <PassCard key={pass.id} pass={pass} />
+                <PassCard key={pass.id} pass={pass} recipients={passRecipients} />
               ))}
             </div>
           </div>
