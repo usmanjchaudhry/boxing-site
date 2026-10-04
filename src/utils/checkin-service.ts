@@ -9,8 +9,6 @@ import type { CheckinMethod, CheckinResult } from '@/utils/checkin-code'
  * API route stays a thin HTTP adapter.
  */
 
-/** A repeat scan of the same member inside this window is treated as the same visit. */
-const DUPLICATE_WINDOW_MS = 2 * 60 * 1000
 const DEFAULT_TIMEZONE = 'America/Los_Angeles'
 
 /** Values allowed by the gym_checkins.status_flag CHECK constraint. */
@@ -53,7 +51,7 @@ export async function processCheckin(
 
   const log = async (flag: LoggedFlag, passId?: string) => {
     if (!facility) {
-      console.error('[checkin] No facility row found â€” check-in not logged')
+      console.error('[checkin] No facility row found — check-in not logged')
       return
     }
     const { error } = await db.from('gym_checkins').insert({
@@ -80,20 +78,7 @@ export async function processCheckin(
     }
   }
 
-  // 2. Most recent successful check-in inside the repeat window. Used ONLY to avoid
-  //    double-counting the visit and double-consuming a day pass. Access is always
-  //    re-evaluated below: a member frozen/cancelled moments ago must be denied.
-  const { data: recent } = await db
-    .from('gym_checkins')
-    .select('id, pass_id')
-    .eq('profile_id', profileId)
-    .eq('status_flag', 'Success')
-    .gte('scanned_at', new Date(Date.now() - DUPLICATE_WINDOW_MS).toISOString())
-    .order('scanned_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
-
-  // 3. Household + role
+  // 2. Household + role
   const { data: hm } = await db
     .from('household_members')
     .select('household_id, role')
@@ -101,8 +86,8 @@ export async function processCheckin(
     .maybeSingle()
 
   let hasValidAccess = false
-  let isRepeatVisit = false
   let passIdToConsume: string | undefined
+  let passIdForLog: string | undefined
   let displayFlag = 'No Active Pass'
   let loggedFlag: LoggedFlag = 'No Active Pass'
   let message = 'No active membership or day pass found.'
@@ -165,8 +150,6 @@ export async function processCheckin(
           }
         }
         hasValidAccess = underDailyLimit
-        // Membership visit inside the repeat window: same visit, don't log twice
-        if (hasValidAccess && recent) isRepeatVisit = true
       }
     } else if (subscription?.status === 'Past_Due') {
       displayFlag = 'Payment Due'
@@ -181,12 +164,23 @@ export async function processCheckin(
     }
   }
 
-  // 4. Day pass. A pass consumed by a check-in inside the repeat window still covers
-  //    this scan (same visit), so don't consume a second one.
-  if (!hasValidAccess && recent?.pass_id) {
-    hasValidAccess = true
-    isRepeatVisit = true
-    planName = 'Day Pass'
+  // 3. Day pass. A pass already used today covers the rest of today, so a second
+  //    scan the same day doesn't burn another pass (or wrongly show red).
+  if (!hasValidAccess) {
+    const { data: usedToday } = await db
+      .from('gym_checkins')
+      .select('pass_id')
+      .eq('profile_id', profileId)
+      .eq('status_flag', 'Success')
+      .not('pass_id', 'is', null)
+      .gte('scanned_at', startOfTodayIn(facility?.timezone || DEFAULT_TIMEZONE).toISOString())
+      .limit(1)
+      .maybeSingle()
+    if (usedToday?.pass_id) {
+      hasValidAccess = true
+      passIdForLog = usedToday.pass_id
+      planName = 'Day Pass'
+    }
   }
   if (!hasValidAccess) {
     const { data: pass } = await db
@@ -199,6 +193,7 @@ export async function processCheckin(
     if (pass) {
       hasValidAccess = true
       passIdToConsume = pass.id
+      passIdForLog = pass.id
       planName = pass.pass_type
     }
   }
@@ -208,7 +203,7 @@ export async function processCheckin(
     return { httpStatus: 200, body: { status: 'denied', flag: displayFlag, message, member: profile } }
   }
 
-  // 5. Waiver â€” required for everyone, including day passes
+  // 4. Waiver — required for everyone, including day passes
   const { data: waivers } = await db
     .from('waivers')
     .select('id')
@@ -217,7 +212,7 @@ export async function processCheckin(
     .limit(1)
 
   if (!waivers || waivers.length === 0) {
-    await log('Waiver Expired', passIdToConsume)
+    await log('Waiver Expired', passIdForLog)
     return {
       httpStatus: 200,
       body: {
@@ -229,27 +224,12 @@ export async function processCheckin(
     }
   }
 
-  // 6. Repeat scan of the same visit: allowed, but no second log row / pass
-  if (isRepeatVisit) {
-    return {
-      httpStatus: 200,
-      body: {
-        status: 'allowed',
-        flag: 'Checked In',
-        message: 'Welcome! Enjoy your workout.',
-        member: profile,
-        plan: { name: planName },
-        duplicate: true,
-      },
-    }
-  }
-
-  // 7. Consume the day pass (only once access is fully granted)
+  // 5. Consume a new day pass (only once access is fully granted)
   if (passIdToConsume) {
     await db.from('passes').update({ status: 'Consumed' }).eq('id', passIdToConsume)
   }
 
-  await log('Success', passIdToConsume)
+  await log('Success', passIdForLog)
   return {
     httpStatus: 200,
     body: {
