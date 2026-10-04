@@ -2,6 +2,7 @@
 
 import { useState, useRef } from 'react'
 import { addDependent } from '@/app/dashboard/actions'
+import DateOfBirthInput from '@/components/DateOfBirthInput'
 
 export default function AddDependentForm() {
   const [loading, setLoading] = useState(false)
@@ -72,11 +73,12 @@ export default function AddDependentForm() {
           placeholder="Last Name"
           className="w-full bg-black border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:ring-2 focus:ring-red-500 outline-none"
         />
-        <input
+        <DateOfBirthInput
           name="dob"
-          type="date"
           required
-          className="w-full bg-black border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:ring-2 focus:ring-red-500 outline-none"
+          autofill={false}
+          labelClassName="block text-xs font-medium text-zinc-400"
+          inputClassName="w-full bg-black border border-white/10 rounded-xl px-2 py-3 text-base sm:text-sm text-white focus:ring-2 focus:ring-red-500 outline-none"
         />
         <button 
           type="submit"

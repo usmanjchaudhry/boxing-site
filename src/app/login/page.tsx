@@ -6,6 +6,9 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { ArrowLeft, Eye, EyeOff, CheckCircle2, XCircle, Loader2 } from 'lucide-react'
 import { login, signup } from './actions'
 import { createBrowserClient } from '@supabase/ssr'
+import DateOfBirthInput from '@/components/DateOfBirthInput'
+
+const INPUT_CLASS = 'block w-full rounded-xl border-0 bg-black/50 py-3 px-4 text-white shadow-sm ring-1 ring-inset ring-white/10 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6 transition-all'
 
 export default function LoginPage() {
   return (
@@ -172,8 +175,10 @@ function LoginPageContent() {
                       id="firstName"
                       name="firstName"
                       type="text"
+                      autoComplete="given-name"
+                      autoCapitalize="words"
                       required={isRegister}
-                      className="block w-full rounded-xl border-0 bg-black/50 py-3 px-4 text-white shadow-sm ring-1 ring-inset ring-white/10 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6 transition-all"
+                      className={INPUT_CLASS}
                       placeholder="Rocky"
                     />
                   </div>
@@ -187,8 +192,10 @@ function LoginPageContent() {
                       id="lastName"
                       name="lastName"
                       type="text"
+                      autoComplete="family-name"
+                      autoCapitalize="words"
                       required={isRegister}
-                      className="block w-full rounded-xl border-0 bg-black/50 py-3 px-4 text-white shadow-sm ring-1 ring-inset ring-white/10 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6 transition-all"
+                      className={INPUT_CLASS}
                       placeholder="Balboa"
                     />
                   </div>
@@ -214,37 +221,27 @@ function LoginPageContent() {
             </div>
 
             {isRegister && (
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label htmlFor="phone" className="block text-sm font-medium text-zinc-300">
-                    Phone Number
-                  </label>
-                  <div className="mt-2">
-                    <input
-                      id="phone"
-                      name="phone"
-                      type="tel"
-                      required={isRegister}
-                      className="block w-full rounded-xl border-0 bg-black/50 py-3 px-4 text-white shadow-sm ring-1 ring-inset ring-white/10 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6 transition-all"
-                      placeholder="747-265-9364"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label htmlFor="dob" className="block text-sm font-medium text-zinc-300">
-                    Date of Birth
-                  </label>
-                  <div className="mt-2">
-                    <input
-                      id="dob"
-                      name="dob"
-                      type="date"
-                      required={isRegister}
-                      className="block w-full rounded-xl border-0 bg-black/50 py-3 px-4 text-white shadow-sm ring-1 ring-inset ring-white/10 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6 transition-all"
-                    />
-                  </div>
+              <div>
+                <label htmlFor="phone" className="block text-sm font-medium text-zinc-300">
+                  Phone Number
+                </label>
+                <div className="mt-2">
+                  <input
+                    id="phone"
+                    name="phone"
+                    type="tel"
+                    inputMode="tel"
+                    autoComplete="tel"
+                    required={isRegister}
+                    className={INPUT_CLASS}
+                    placeholder="747-265-9364"
+                  />
                 </div>
               </div>
+            )}
+
+            {isRegister && (
+              <DateOfBirthInput name="dob" required autofill inputClassName={INPUT_CLASS} />
             )}
 
             <div>
@@ -263,7 +260,7 @@ function LoginPageContent() {
                   id="password"
                   name="password"
                   type={showPassword ? "text" : "password"}
-                  autoComplete="current-password"
+                  autoComplete={isRegister ? 'new-password' : 'current-password'}
                   required
                   className={`block w-full rounded-xl border-0 bg-black/50 py-3 pl-4 pr-12 text-white shadow-sm ring-1 ring-inset focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6 transition-all ${passwordMismatch ? 'ring-red-500/50 bg-red-950/20' : 'ring-white/10'}`}
                   placeholder="••••••••"

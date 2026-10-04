@@ -2,6 +2,7 @@
 
 import { createClient } from '@/utils/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { dobError } from '@/utils/dob'
 
 export async function login(formData: FormData) {
   const supabase = await createClient()
@@ -38,6 +39,10 @@ export async function signup(formData: FormData) {
   const phone = formData.get('phone') as string
   const dob = formData.get('dob') as string
 
+  const dobProblem = dobError(dob)
+  if (dobProblem) {
+    return { error: dobProblem }
+  }
   const { data: authData, error: authError } = await supabase.auth.signUp({
     email,
     password,

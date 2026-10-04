@@ -2,6 +2,7 @@
 
 import { createClient } from '@/utils/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { dobError } from '@/utils/dob'
 
 // 1. SIGN WAIVER
 export async function signWaiver(signatureDataUrl: string, participantId: string) {
@@ -55,6 +56,9 @@ export async function addDependent(formData: FormData) {
   const firstName = formData.get('firstName') as string
   const lastName = formData.get('lastName') as string
   const dob = formData.get('dob') as string
+
+  const dobProblem = dobError(dob)
+  if (dobProblem) throw new Error(dobProblem)
 
   // A single, atomic, transactional RPC call to Postgres!
   const { data: childId, error } = await supabase.rpc('add_dependent_to_household', {
