@@ -20,12 +20,15 @@ export default async function ClassifiedPage() {
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   )
   
-  // Get Legacy Plan
+  // Get Legacy Plan. order + limit(1) instead of .single(): .single() returns
+  // nothing when two rows share the name, which showed "Legacy plan not found".
   const { data: plan } = await supabaseAdmin
     .from('membership_plans')
     .select('*')
     .eq('name', 'Legacy Unlimited')
-    .single()
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle()
 
   if (!plan) {
     return (

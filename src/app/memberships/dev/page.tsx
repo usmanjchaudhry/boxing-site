@@ -25,23 +25,30 @@ export default async function DevPage() {
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   )
 
+  // order + limit(1) instead of .single(): .single() returns nothing if a name is ever duplicated.
   const { data: devPlan } = await adminDb
     .from('membership_plans')
     .select('*')
     .eq('name', 'Dev Membership')
-    .single()
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle()
 
   const { data: devDoublePlan } = await adminDb
     .from('membership_plans')
     .select('*')
     .eq('name', 'Dev Double Membership')
-    .single()
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle()
 
   const { data: devPass } = await adminDb
     .from('products')
     .select('*')
     .eq('name', 'Dev Day Pass')
-    .single()
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle()
 
   return (
     <div className="min-h-screen bg-black text-white font-sans selection:bg-green-500 selection:text-white">
