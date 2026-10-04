@@ -9,6 +9,8 @@ import Navbar from '@/components/Navbar'
 import AddDependentForm from '@/components/AddDependentForm'
 import MemberQRCode from '@/components/MemberQRCode'
 import TicketCard from '@/components/TicketCard'
+import DuplicateSubscriptionAlert from '@/components/DuplicateSubscriptionAlert'
+import { getBillingSubscriptions, type BillingSubscription } from '@/utils/stripe-duplicates'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -115,6 +117,21 @@ export default async function DashboardPage() {
     }
   }
 
+  // 3.2 Detect duplicate billing: Stripe is charging this household for more than one membership.
+  // Our DB keeps one subscription per household, so only Stripe knows about the extra one.
+  let billingSubscriptions: BillingSubscription[] = []
+  if (householdId) {
+    const { data: household } = await supabase
+      .from('households')
+      .select('stripe_customer_id')
+      .eq('id', householdId)
+      .maybeSingle()
+    if (household?.stripe_customer_id) {
+      billingSubscriptions = await getBillingSubscriptions(household.stripe_customer_id)
+    }
+  }
+  const hasDuplicateBilling = billingSubscriptions.length > 1
+
   // 3.5 Fetch All Passes (Available & Past)
   let availablePasses: any[] = []
   let pastPasses: any[] = []
@@ -215,6 +232,15 @@ export default async function DashboardPage() {
         />
       )}
 
+      {/* DUPLICATE BILLING POPUP (after the waiver is signed, so the two overlays never stack) */}
+      {hasDuplicateBilling && !missingWaiverFor && (
+        <DuplicateSubscriptionAlert
+          subscriptions={billingSubscriptions}
+          currentSubscriptionId={subscription?.stripe_subscription_id ?? null}
+          memberName={profile?.first_name || ''}
+        />
+      )}
+
       <Navbar />
 
       <main className={`max-w-7xl mx-auto px-4 sm:px-6 py-8 sm:py-12 ${missingWaiverFor ? 'blur-md pointer-events-none' : ''}`}>
@@ -267,6 +293,13 @@ export default async function DashboardPage() {
               )}
               {!subscription && (
                 <p className="text-sm text-zinc-500 mt-2">You do not have a subscription yet.</p>
+              )}
+              {hasDuplicateBilling && (
+                <div className="mt-2 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
+                  <p className="text-xs text-amber-400 font-medium">
+                    ⚠ You&apos;re being billed for {billingSubscriptions.length} memberships. Call (747) 265-9364 or email info@lafamiliashowtime.com and we&apos;ll cancel the extra one.
+                  </p>
+                </div>
               )}
             </div>
             <Link 
