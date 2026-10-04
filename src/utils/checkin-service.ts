@@ -53,7 +53,7 @@ export async function processCheckin(
 
   const log = async (flag: LoggedFlag, passId?: string) => {
     if (!facility) {
-      console.error('[checkin] No facility row found — check-in not logged')
+      console.error('[checkin] No facility row found â€” check-in not logged')
       return
     }
     const { error } = await db.from('gym_checkins').insert({
@@ -80,30 +80,18 @@ export async function processCheckin(
     }
   }
 
-  // 2. Repeat scan moments after a successful check-in: let them in again, but
-  //    don't write a second log row (keeps "Today's check-ins" accurate) and
-  //    don't re-evaluate access (a day pass was already consumed on the first scan).
+  // 2. Most recent successful check-in inside the repeat window. Used ONLY to avoid
+  //    double-counting the visit and double-consuming a day pass. Access is always
+  //    re-evaluated below: a member frozen/cancelled moments ago must be denied.
   const { data: recent } = await db
     .from('gym_checkins')
-    .select('id')
+    .select('id, pass_id')
     .eq('profile_id', profileId)
     .eq('status_flag', 'Success')
     .gte('scanned_at', new Date(Date.now() - DUPLICATE_WINDOW_MS).toISOString())
+    .order('scanned_at', { ascending: false })
     .limit(1)
     .maybeSingle()
-
-  if (recent) {
-    return {
-      httpStatus: 200,
-      body: {
-        status: 'allowed',
-        flag: 'Checked In',
-        message: 'Welcome! Enjoy your workout.',
-        member: profile,
-        duplicate: true,
-      },
-    }
-  }
 
   // 3. Household + role
   const { data: hm } = await db
@@ -113,6 +101,7 @@ export async function processCheckin(
     .maybeSingle()
 
   let hasValidAccess = false
+  let isRepeatVisit = false
   let passIdToConsume: string | undefined
   let displayFlag = 'No Active Pass'
   let loggedFlag: LoggedFlag = 'No Active Pass'
@@ -124,14 +113,14 @@ export async function processCheckin(
       .from('subscriptions')
       .select('status, plan_id, end_date, payment_method, membership_plans(name, max_dependents, max_daily_checkins)')
       .eq('household_id', hm.household_id)
-      .eq('status', 'Active')
       .limit(1)
       .maybeSingle()
 
-    if (subscription) {
-      const joined = subscription.membership_plans as unknown
-      const plan = (Array.isArray(joined) ? joined[0] : joined) as
-        { name: string; max_dependents: number | null; max_daily_checkins: number | null } | null
+    const joined = subscription?.membership_plans as unknown
+    const plan = (Array.isArray(joined) ? joined[0] : joined) as
+      { name: string; max_dependents: number | null; max_daily_checkins: number | null } | null
+
+    if (subscription?.status === 'Active') {
       planName = plan?.name ?? ''
 
       // Cash subscriptions carry an end_date and expire automatically
@@ -176,24 +165,29 @@ export async function processCheckin(
           }
         }
         hasValidAccess = underDailyLimit
+        // Membership visit inside the repeat window: same visit, don't log twice
+        if (hasValidAccess && recent) isRepeatVisit = true
       }
-    } else {
-      const { data: pastDue } = await db
-        .from('subscriptions')
-        .select('status')
-        .eq('household_id', hm.household_id)
-        .eq('status', 'Past_Due')
-        .limit(1)
-        .maybeSingle()
-      if (pastDue) {
-        displayFlag = 'Payment Due'
-        loggedFlag = 'Payment Due'
-        message = 'The last membership payment failed. Ask the member to update their card.'
-      }
+    } else if (subscription?.status === 'Past_Due') {
+      displayFlag = 'Payment Due'
+      loggedFlag = 'Payment Due'
+      message = 'The last membership payment failed. Ask the member to update their card.'
+    } else if (subscription?.status === 'Frozen') {
+      displayFlag = 'Membership Frozen'
+      message = `${plan?.name ?? 'This membership'} is frozen. Unfreeze it in Admin to allow entry.`
+    } else if (subscription?.status === 'Cancelled') {
+      displayFlag = 'Membership Cancelled'
+      message = `${plan?.name ?? 'This membership'} was cancelled.`
     }
   }
 
-  // 4. Fall back to an unused day pass
+  // 4. Day pass. A pass consumed by a check-in inside the repeat window still covers
+  //    this scan (same visit), so don't consume a second one.
+  if (!hasValidAccess && recent?.pass_id) {
+    hasValidAccess = true
+    isRepeatVisit = true
+    planName = 'Day Pass'
+  }
   if (!hasValidAccess) {
     const { data: pass } = await db
       .from('passes')
@@ -214,7 +208,7 @@ export async function processCheckin(
     return { httpStatus: 200, body: { status: 'denied', flag: displayFlag, message, member: profile } }
   }
 
-  // 5. Waiver — required for everyone, including day passes
+  // 5. Waiver â€” required for everyone, including day passes
   const { data: waivers } = await db
     .from('waivers')
     .select('id')
@@ -235,7 +229,22 @@ export async function processCheckin(
     }
   }
 
-  // 6. Consume the day pass (only once access is fully granted)
+  // 6. Repeat scan of the same visit: allowed, but no second log row / pass
+  if (isRepeatVisit) {
+    return {
+      httpStatus: 200,
+      body: {
+        status: 'allowed',
+        flag: 'Checked In',
+        message: 'Welcome! Enjoy your workout.',
+        member: profile,
+        plan: { name: planName },
+        duplicate: true,
+      },
+    }
+  }
+
+  // 7. Consume the day pass (only once access is fully granted)
   if (passIdToConsume) {
     await db.from('passes').update({ status: 'Consumed' }).eq('id', passIdToConsume)
   }
