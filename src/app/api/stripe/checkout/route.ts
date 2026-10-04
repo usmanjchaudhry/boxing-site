@@ -3,6 +3,9 @@ import { stripe } from '@/utils/stripe/server'
 import { createClient } from '@/utils/supabase/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 
+/** The only account allowed to buy hidden test products (matches /memberships/dev). */
+const DEV_ACCOUNT_EMAIL = 'usmanjc98@gmail.com'
+
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient()
@@ -47,13 +50,20 @@ export async function POST(request: NextRequest) {
       meta = { plan_id: planId }
       checkoutMode = 'subscription'
     } else if (productId) {
-      const { data: product, error: prodErr } = await supabase
+      // Service-role read so hidden (is_active=false) products like the $1 Dev Day Pass
+      // can be found; RLS hides them from the user's client. Hidden products are then
+      // restricted to the same dev account the /memberships/dev page allows.
+      const productDb = createSupabaseClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!
+      )
+      const { data: product, error: prodErr } = await productDb
         .from('products')
         .select('*')
         .eq('id', productId)
         .single()
 
-      if (prodErr || !product) {
+      if (prodErr || !product || (!product.is_active && user.email !== DEV_ACCOUNT_EMAIL)) {
         return NextResponse.json({ error: 'Product not found' }, { status: 404 })
       }
 
