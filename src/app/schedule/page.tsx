@@ -109,16 +109,6 @@ export default function SchedulePage() {
                               {cls.type}
                             </span>
                           </div>
-                          <div className="flex items-center gap-3 mt-1">
-                            <span className="text-xs text-zinc-500 flex items-center gap-1">
-                              <span className="w-1.5 h-1.5 bg-zinc-600 rounded-full" />
-                              {cls.coach}
-                            </span>
-                            <span className="text-xs text-zinc-600 flex items-center gap-1">
-                              <Users className="w-3 h-3" />
-                              {cls.spots} spots
-                            </span>
-                          </div>
                         </div>
 
                         {/* CTA */}
