@@ -15,7 +15,7 @@ const trainers = [
     specialties: ['Cardio Boxing', 'Endurance']
   },
   {
-    name: 'Coach Markos',
+    name: 'Coach Markitos',
     role: 'Coach',
     image: '/images/coaches/coachMarkos.PNG',
     specialties: ['Boxing Fundamentals', 'Strength & Conditioning']
