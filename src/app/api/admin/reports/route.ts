@@ -1,188 +1,170 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@/utils/supabase/server'
+import type Stripe from 'stripe'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { stripe } from '@/utils/stripe/server'
+import { getServiceClient, getStaffProfile } from '@/utils/auth/staff'
+import { DEFAULT_TIMEZONE, addDays, localDateString, zonedMidnightUtc } from '@/utils/timezone'
+
+/**
+ * Admin reports. All dates are grouped in the gym's timezone (Vercel runs in UTC),
+ * reads use the service client (RLS would hide other members' rows), and only
+ * successful check-ins count as visits.
+ */
+
+const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+
+/** 'YYYY-MM' that is `back` months before `ymd`'s month. */
+function monthKeyBack(ymd: string, back: number): string {
+  const [y, m] = ymd.split('-').map(Number)
+  const d = new Date(Date.UTC(y, m - 1 - back, 1))
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`
+}
+const monthLabel = (key: string) =>
+  new Date(`${key}-01T12:00:00Z`).toLocaleDateString('en-US', { month: 'short', year: '2-digit', timeZone: 'UTC' })
+const dayLabel = (ymd: string) =>
+  new Date(`${ymd}T12:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
+
+/** Supabase returns at most 1000 rows per request, so page through. */
+async function fetchAll<T>(build: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>): Promise<T[]> {
+  const rows: T[] = []
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await build(from, from + 999)
+    if (error) throw new Error(error.message)
+    rows.push(...(data ?? []))
+    if (!data || data.length < 1000) return rows
+  }
+}
+
+async function facilityTimezone(db: SupabaseClient): Promise<string> {
+  const { data } = await db.from('facilities').select('timezone').limit(1).maybeSingle()
+  return data?.timezone || DEFAULT_TIMEZONE
+}
 
 export async function GET() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-
-  if (!user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
-  // Verify admin role
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('auth_user_id', user.id)
-    .single()
-
-  if (!profile || (profile.role !== 'admin' && profile.role !== 'staff')) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-  }
+  // Reports show revenue, so admins only (the tab is admin-only too)
+  const admin = await getStaffProfile('admin')
+  if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   try {
-    // 1. Member growth over time (last 6 months)
-    const sixMonthsAgo = new Date()
-    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6)
+    const db = getServiceClient()
+    const tz = await facilityTimezone(db)
+    const now = new Date()
+    const today = localDateString(now, tz)
 
-    const { data: allProfiles } = await supabase
-      .from('profiles')
-      .select('created_at')
-      .gte('created_at', sixMonthsAgo.toISOString())
-      .order('created_at', { ascending: true })
+    // Last 6 calendar months, oldest first (this month included)
+    const monthKeys = [5, 4, 3, 2, 1, 0].map(i => monthKeyBack(today, i))
+    const windowStart = zonedMidnightUtc(`${monthKeys[0]}-01`, tz)
 
-    // Group by month
-    const memberGrowth: Record<string, number> = {}
-    const months = []
-    for (let i = 5; i >= 0; i--) {
-      const d = new Date()
-      d.setMonth(d.getMonth() - i)
-      const key = d.toISOString().slice(0, 7) // YYYY-MM
-      const label = d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' })
-      memberGrowth[key] = 0
-      months.push({ key, label })
+    // 1. New people per month (accounts + family members added)
+    const profiles = await fetchAll<{ created_at: string }>((a, b) =>
+      db.from('profiles').select('created_at').gte('created_at', windowStart.toISOString()).range(a, b))
+    const growth: Record<string, number> = Object.fromEntries(monthKeys.map(k => [k, 0]))
+    for (const p of profiles) {
+      const k = localDateString(new Date(p.created_at), tz).slice(0, 7)
+      if (k in growth) growth[k]++
     }
+    const memberGrowth = monthKeys.map(k => ({ month: monthLabel(k), members: growth[k] }))
 
-    allProfiles?.forEach(p => {
-      const key = p.created_at.slice(0, 7)
-      if (memberGrowth[key] !== undefined) {
-        memberGrowth[key]++
-      }
+    // 2. Check-ins: successful entries only, last 30 days including today
+    const first30 = addDays(today, -29)
+    const checkins = await fetchAll<{ scanned_at: string }>((a, b) =>
+      db.from('gym_checkins').select('scanned_at')
+        .eq('status_flag', 'Success')
+        .gte('scanned_at', zonedMidnightUtc(first30, tz).toISOString())
+        .range(a, b))
+    const perDate: Record<string, number> = {}
+    for (const c of checkins) {
+      const d = localDateString(new Date(c.scanned_at), tz)
+      perDate[d] = (perDate[d] || 0) + 1
+    }
+    const byWeekday: Record<string, number> = Object.fromEntries(DAY_NAMES.map(d => [d, 0]))
+    for (const [ymd, n] of Object.entries(perDate)) {
+      byWeekday[DAY_NAMES[new Date(`${ymd}T12:00:00Z`).getUTCDay()]] += n
+    }
+    const checkinsByDay = DAY_NAMES.map(day => ({ day, checkins: byWeekday[day] }))
+    const checkinTrend = Array.from({ length: 14 }, (_, i) => {
+      const ymd = addDays(today, i - 13)
+      return { date: dayLabel(ymd), checkins: perDate[ymd] || 0 }
     })
 
-    const memberGrowthData = months.map(m => ({
-      month: m.label,
-      members: memberGrowth[m.key]
-    }))
-
-    // 2. Check-in frequency (last 30 days, grouped by day)
-    const thirtyDaysAgo = new Date()
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
-
-    const { data: recentCheckins } = await supabase
-      .from('check_ins')
-      .select('scanned_at')
-      .gte('scanned_at', thirtyDaysAgo.toISOString())
-      .order('scanned_at', { ascending: true })
-
-    // Group by day of week
-    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-    const checkinsByDay: Record<string, number> = {}
-    dayNames.forEach(d => { checkinsByDay[d] = 0 })
-
-    recentCheckins?.forEach(c => {
-      const day = dayNames[new Date(c.scanned_at).getDay()]
-      checkinsByDay[day]++
-    })
-
-    const checkinsByDayData = dayNames.map(d => ({
-      day: d,
-      checkins: checkinsByDay[d]
-    }))
-
-    // 3. Check-ins per day (last 14 days for trend)
-    const fourteenDaysAgo = new Date()
-    fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14)
-
-    const checkinTrend: { date: string; checkins: number }[] = []
-    for (let i = 13; i >= 0; i--) {
-      const d = new Date()
-      d.setDate(d.getDate() - i)
-      const dateStr = d.toISOString().split('T')[0]
-      const label = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-      const count = recentCheckins?.filter(c => c.scanned_at.startsWith(dateStr)).length || 0
-      checkinTrend.push({ date: label, checkins: count })
-    }
-
-    // 4. Subscription breakdown
-    const { data: subscriptions } = await supabase
+    // 3. Memberships (one per household). Cash memberships past their end date
+    //    count as cancelled, same rule as the scanner.
+    const { data: subs, error: subsErr } = await db
       .from('subscriptions')
-      .select('status, membership_plans(name)')
-
-    const statusCounts: Record<string, number> = { Active: 0, Cancelled: 0, Past_Due: 0, Frozen: 0 }
+      .select('status, end_date, payment_method, membership_plans(name)')
+    if (subsErr) throw new Error(subsErr.message)
+    const statusCounts: Record<string, number> = { Active: 0, Past_Due: 0, Frozen: 0, Cancelled: 0 }
     const planCounts: Record<string, number> = {}
-
-    subscriptions?.forEach(s => {
-      if (statusCounts[s.status] !== undefined) {
-        statusCounts[s.status]++
-      }
-      const planName = (s.membership_plans as any)?.name || 'Unknown'
-      planCounts[planName] = (planCounts[planName] || 0) + 1
-    })
-
-    const subscriptionStatusData = Object.entries(statusCounts)
-      .filter(([, v]) => v > 0)
-      .map(([status, count]) => ({ status, count }))
-
-    const planDistributionData = Object.entries(planCounts)
-      .map(([plan, count]) => ({ plan, count }))
-      .sort((a, b) => b.count - a.count)
-
-    // 5. Revenue data from Stripe (last 6 months)
-    const revenueData: { month: string; revenue: number }[] = []
-    for (let i = 5; i >= 0; i--) {
-      const start = new Date()
-      start.setMonth(start.getMonth() - i, 1)
-      start.setHours(0, 0, 0, 0)
-      const end = new Date(start)
-      end.setMonth(end.getMonth() + 1)
-
-      const label = start.toLocaleDateString('en-US', { month: 'short', year: '2-digit' })
-
-      try {
-        const chargesResponse = await stripe.charges.list({
-          created: {
-            gte: Math.floor(start.getTime() / 1000),
-            lt: Math.floor(end.getTime() / 1000),
-          },
-          limit: 100,
-        })
-        const charges = 'data' in chargesResponse && Array.isArray(chargesResponse.data)
-          ? chargesResponse.data
-          : (chargesResponse as any)?.data || []
-
-        const monthRevenue = charges
-          .filter((c: any) => c.status === 'succeeded')
-          .reduce((sum: number, c: any) => sum + (c.amount || 0), 0)
-
-        revenueData.push({ month: label, revenue: monthRevenue / 100 })
-      } catch {
-        revenueData.push({ month: label, revenue: 0 })
+    for (const s of subs ?? []) {
+      const expiredCash = s.status === 'Active' && s.payment_method === 'cash' && s.end_date && now > new Date(s.end_date)
+      const status = expiredCash ? 'Cancelled' : s.status
+      if (status in statusCounts) statusCounts[status]++
+      if (status === 'Active') {
+        const joined = s.membership_plans as unknown
+        const plan = (Array.isArray(joined) ? joined[0] : joined) as { name?: string } | null
+        const name = plan?.name || 'Unknown'
+        planCounts[name] = (planCounts[name] || 0) + 1
       }
     }
+    const subscriptionStatus = Object.entries(statusCounts).filter(([, v]) => v > 0).map(([status, count]) => ({ status, count }))
+    const planDistribution = Object.entries(planCounts).map(([plan, count]) => ({ plan, count })).sort((a, b) => b.count - a.count)
 
-    // 6. Total revenue (all time)
-    const totalRevenue = revenueData.reduce((sum, r) => sum + r.revenue, 0)
+    // 4. Revenue per month: card payments (Stripe, minus refunds) + recorded cash
+    const card: Record<string, number> = Object.fromEntries(monthKeys.map(k => [k, 0]))
+    const cash: Record<string, number> = Object.fromEntries(monthKeys.map(k => [k, 0]))
+    let revenueComplete = true
+    try {
+      // Auto-pagination: every charge in the window, not just the first 100
+      for await (const c of stripe.charges.list({ created: { gte: Math.floor(windowStart.getTime() / 1000) }, limit: 100 }) as AsyncIterable<Stripe.Charge>) {
+        if (c.status !== 'succeeded') continue
+        const k = localDateString(new Date(c.created * 1000), tz).slice(0, 7)
+        if (k in card) card[k] += (c.amount - (c.amount_refunded || 0)) / 100
+      }
+    } catch (e) {
+      revenueComplete = false
+      console.error('[reports] Stripe revenue failed:', e instanceof Error ? e.message : e)
+    }
+    const { data: cashRows } = await db
+      .from('cash_payments')
+      .select('amount_cents, payment_date')
+      .gte('payment_date', `${monthKeys[0]}-01`)
+    for (const r of cashRows ?? []) {
+      const k = String(r.payment_date).slice(0, 7)
+      if (k in cash) cash[k] += (r.amount_cents || 0) / 100
+    }
+    const revenue = monthKeys.map(k => ({
+      month: monthLabel(k),
+      revenue: Math.round((card[k] + cash[k]) * 100) / 100,
+      card: Math.round(card[k] * 100) / 100,
+      cash: Math.round(cash[k] * 100) / 100,
+    }))
+    const totalRevenue = Math.round(revenue.reduce((s, r) => s + r.revenue, 0) * 100) / 100
 
-    // 7. Churn rate (cancelled / (active + cancelled) last 30 days)
-    const activeCount = statusCounts.Active || 0
-    const cancelledCount = statusCounts.Cancelled || 0
-    const total = activeCount + cancelledCount
-    const churnRate = total > 0 ? Math.round((cancelledCount / total) * 100) : 0
-
-    // 8. Average check-ins per day (last 30 days)
-    const totalCheckins = recentCheckins?.length || 0
-    const avgCheckinsPerDay = Math.round((totalCheckins / 30) * 10) / 10
+    // 5. Summary
+    const activeCount = statusCounts.Active
+    const everCount = Object.values(statusCounts).reduce((a, b) => a + b, 0)
+    const cancelledRate = everCount > 0 ? Math.round((statusCounts.Cancelled / everCount) * 100) : 0
+    const totalCheckins = checkins.length
 
     return NextResponse.json({
-      memberGrowth: memberGrowthData,
-      checkinsByDay: checkinsByDayData,
+      memberGrowth,
+      checkinsByDay,
       checkinTrend,
-      subscriptionStatus: subscriptionStatusData,
-      planDistribution: planDistributionData,
-      revenue: revenueData,
+      subscriptionStatus,
+      planDistribution,
+      revenue,
       summary: {
         totalRevenue,
-        churnRate,
-        avgCheckinsPerDay,
+        revenueComplete,
+        churnRate: cancelledRate,
+        avgCheckinsPerDay: Math.round((totalCheckins / 30) * 10) / 10,
         totalCheckins,
         activeMembers: activeCount,
-        cancelledMembers: cancelledCount,
-      }
+        cancelledMembers: statusCounts.Cancelled,
+      },
     })
-  } catch (err: any) {
+  } catch (err) {
     console.error('Reports API error:', err)
-    return NextResponse.json({ error: err.message }, { status: 500 })
+    return NextResponse.json({ error: err instanceof Error ? err.message : 'Failed to load reports' }, { status: 500 })
   }
 }

@@ -21,6 +21,7 @@ interface ReportsData {
     totalCheckins: number
     activeMembers: number
     cancelledMembers: number
+    revenueComplete?: boolean
   }
 }
 
@@ -97,28 +98,28 @@ export default function ReportsTab() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <SummaryCard
           icon={<DollarSign className="w-5 h-5" />}
-          label="Total Revenue"
+          label={summary.revenueComplete === false ? 'Revenue, 6 mo (cash only, card failed)' : 'Revenue (last 6 months)'}
           value={`$${summary.totalRevenue.toLocaleString()}`}
           color="text-green-400"
           bgColor="bg-green-500/10"
         />
         <SummaryCard
           icon={<Users className="w-5 h-5" />}
-          label="Active Members"
+          label="Active Memberships"
           value={summary.activeMembers.toString()}
           color="text-blue-400"
           bgColor="bg-blue-500/10"
         />
         <SummaryCard
           icon={<Activity className="w-5 h-5" />}
-          label="Avg Daily Check-ins"
+          label="Avg Daily Check-ins (30 days)"
           value={summary.avgCheckinsPerDay.toString()}
           color="text-purple-400"
           bgColor="bg-purple-500/10"
         />
         <SummaryCard
           icon={summary.churnRate > 20 ? <TrendingDown className="w-5 h-5" /> : <TrendingUp className="w-5 h-5" />}
-          label="Churn Rate"
+          label="Cancelled (of all memberships)"
           value={`${summary.churnRate}%`}
           color={summary.churnRate > 20 ? 'text-red-400' : 'text-green-400'}
           bgColor={summary.churnRate > 20 ? 'bg-red-500/10' : 'bg-green-500/10'}
@@ -130,7 +131,7 @@ export default function ReportsTab() {
         <div className="flex items-center gap-2 mb-6">
           <DollarSign className="w-5 h-5 text-green-400" />
           <h3 className="text-lg font-bold">Monthly Revenue</h3>
-          <span className="text-xs text-zinc-500 ml-auto">Last 6 months</span>
+          <span className="text-xs text-zinc-500 ml-auto">Card + cash, after refunds · last 6 months</span>
         </div>
         <ResponsiveContainer width="100%" height={280}>
           <AreaChart data={data.revenue}>
@@ -162,7 +163,7 @@ export default function ReportsTab() {
         <div className="rounded-2xl bg-zinc-950 border border-white/5 p-4 sm:p-6">
           <div className="flex items-center gap-2 mb-6">
             <Users className="w-5 h-5 text-blue-400" />
-            <h3 className="text-lg font-bold">New Members</h3>
+            <h3 className="text-lg font-bold">New People Added</h3>
             <span className="text-xs text-zinc-500 ml-auto">Last 6 months</span>
           </div>
           <ResponsiveContainer width="100%" height={240}>
@@ -230,7 +231,7 @@ export default function ReportsTab() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Subscription Status Pie */}
         <div className="rounded-2xl bg-zinc-950 border border-white/5 p-4 sm:p-6">
-          <h3 className="text-lg font-bold mb-6">Subscription Status</h3>
+          <h3 className="text-lg font-bold mb-6">Membership Status</h3>
           {data.subscriptionStatus.length > 0 ? (
             <ResponsiveContainer width="100%" height={260}>
               <PieChart>
@@ -261,7 +262,7 @@ export default function ReportsTab() {
 
         {/* Plan Distribution */}
         <div className="rounded-2xl bg-zinc-950 border border-white/5 p-4 sm:p-6">
-          <h3 className="text-lg font-bold mb-6">Plan Distribution</h3>
+          <h3 className="text-lg font-bold mb-6">Active Memberships by Plan</h3>
           {data.planDistribution.length > 0 ? (
             <ResponsiveContainer width="100%" height={260}>
               <PieChart>
