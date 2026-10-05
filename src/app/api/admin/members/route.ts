@@ -65,13 +65,25 @@ export async function GET(request: NextRequest) {
   // Get all subscriptions with plan names + stripe subscription ID
   const { data: subs } = await db
     .from('subscriptions')
-    .select('household_id, status, stripe_subscription_id, membership_plans(name, max_dependents)')
+    .select('household_id, status, end_date, payment_method, stripe_subscription_id, membership_plans(name, max_dependents)')
+
+  // Cash memberships end on their own. They used to flip to Cancelled only when the
+  // member scanned or opened their dashboard, so staff still saw "Active" here.
+  // Same rule as the scanner (now > end_date); also saved so every screen agrees.
+  const now = new Date()
+  const expiredHouseholds = (subs || [])
+    .filter(s => s.status === 'Active' && s.payment_method === 'cash' && s.end_date && now > new Date(s.end_date))
+    .map(s => s.household_id)
+  if (expiredHouseholds.length > 0) {
+    await db.from('subscriptions').update({ status: 'Cancelled' })
+      .in('household_id', expiredHouseholds).eq('status', 'Active').eq('payment_method', 'cash')
+  }
 
   const subMap: Record<string, { status: string; planName: string; stripeSubId: string | null; maxDependents: number }> = {}
   for (const s of subs || []) {
     const plan = s.membership_plans as any
     subMap[s.household_id] = {
-      status: s.status,
+      status: expiredHouseholds.includes(s.household_id) ? 'Cancelled' : s.status,
       planName: plan?.name || 'Unknown',
       stripeSubId: s.stripe_subscription_id,
       maxDependents: plan?.max_dependents ?? 0
