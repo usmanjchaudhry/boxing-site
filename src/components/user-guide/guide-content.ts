@@ -292,7 +292,7 @@ export function buildGuide(role: StaffRole, facts: GuideFacts): GuideSection[] {
               text: 'Pick a plan and tap **Subscribe**.',
               detail: [
                 individual ? `${individual.name} (${individual.price}/month) is just for them.` : '',
-                family ? `${family.name} (${family.price}/month) also covers family members on their account.` : '',
+                family ? `${family.name} (${family.price}/month) is mostly for a parent and their kid, or two kids. If they\u2019re only buying for one kid, the ${individual?.name ?? 'individual plan'} is enough.` : '',
               ].filter(Boolean).join('\n'),
             },
             { text: 'A secure payment page opens. They type their card details and tap **Subscribe**.' },
@@ -344,7 +344,10 @@ export function buildGuide(role: StaffRole, facts: GuideFacts): GuideSection[] {
                 }
               : { text: 'The account holder buys a family plan from **View Memberships**.' },
             ...(individual
-              ? [{ text: `The **${individual.name}** only covers the account holder. Family members on that plan need a day pass or the family plan.` }]
+              ? [{
+                  text: `The **${family?.name ?? 'family plan'}** is mostly for a parent and their kid, or two kids. If the parent is only buying for **one kid**, they can buy the **${individual.name}** instead.`,
+                  detail: `The ${individual.name} covers only the person whose account it\u2019s bought on, so buy it on the kid\u2019s own account (sign the kid up with their own email, see \u201cHelping a customer sign up\u201d).`,
+                }]
               : []),
             { text: 'Each family member scans their **own** QR code at the front desk.' },
           ],
