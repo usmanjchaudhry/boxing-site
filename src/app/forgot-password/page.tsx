@@ -48,8 +48,9 @@ export default function ForgotPasswordPage() {
           Back to Sign In
         </Link>
         <h2 className="text-center text-3xl sm:text-4xl font-black tracking-tighter text-white">
-          <span className="text-red-600">TITLE</span> BOXING
+          <span className="text-red-600">LA FAMILIA</span> SHOWTIME
         </h2>
+        <p className="text-center text-xs text-zinc-500 uppercase tracking-[3px] mt-1">Boxing Club</p>
         <p className="mt-2 text-center text-sm text-zinc-400 font-medium">
           Reset your password
         </p>

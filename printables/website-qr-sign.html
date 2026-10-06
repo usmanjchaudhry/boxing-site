@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>La Familia Showtime Boxing Club – Scan to Visit Our Website</title>
+<meta name="description" content="Printable QR code sign that opens the La Familia Showtime Boxing Club website.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;700;900&display=swap" rel="stylesheet">
+<style>
+  @page { size: letter portrait; margin: 0; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: #e4e4e7; }
+  body {
+    font-family: 'Inter', system-ui, sans-serif;
+    color: #09090b;
+    display: flex; flex-direction: column; align-items: center; gap: 16px;
+    padding: 24px 0;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .toolbar { display: flex; gap: 12px; align-items: center; font-size: 14px; color: #3f3f46; }
+  .toolbar button {
+    font: inherit; font-weight: 700; padding: 10px 20px; border-radius: 10px; border: 0;
+    background: #dc2626; color: #fff; cursor: pointer;
+  }
+  .page {
+    width: 8.5in; height: 11in; background: #fff;
+    box-shadow: 0 10px 40px rgba(0,0,0,.15);
+    display: flex; flex-direction: column; align-items: center; justify-content: space-between;
+    padding: 0.75in 0.75in 0.6in; position: relative; overflow: hidden;
+  }
+  .page::before, .page::after {
+    content: ''; position: absolute; left: 0; right: 0; height: 0.28in; background: #dc2626;
+  }
+  .page::before { top: 0; }
+  .page::after { bottom: 0; }
+  .brand { text-align: center; }
+  .brand h1 { font-size: 64px; font-weight: 900; letter-spacing: -2px; line-height: 1; }
+  .brand h1 span { color: #dc2626; }
+  .brand p { margin-top: 10px; font-size: 18px; font-weight: 700; letter-spacing: 8px; text-transform: uppercase; color: #52525b; }
+  .cta { text-align: center; }
+  .cta h2 { font-size: 46px; font-weight: 900; letter-spacing: -1px; }
+  .cta p { margin-top: 8px; font-size: 20px; color: #3f3f46; font-weight: 500; }
+  .qr {
+    width: 5in; height: 5in; padding: 0.15in;
+    border: 6px solid #09090b; border-radius: 28px; background: #fff;
+  }
+  .qr img { width: 100%; height: 100%; display: block; }
+  .footer { text-align: center; }
+  .url { font-size: 26px; font-weight: 900; letter-spacing: -0.5px; }
+  .perks { margin-top: 10px; font-size: 16px; color: #52525b; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; }
+  .perks b { color: #dc2626; }
+  @media print {
+    html, body { background: #fff; }
+    body { padding: 0; }
+    .toolbar { display: none; }
+    .page { box-shadow: none; }
+  }
+</style>
+</head>
+<body>
+  <div class="toolbar">
+    <button id="print-btn" onclick="window.print()">Print / Save as PDF</button>
+    <span>Letter size · set margins to “None” and turn on “Background graphics”</span>
+  </div>
+
+  <main class="page">
+    <header class="brand">
+      <h1><span>LA FAMILIA</span> SHOWTIME</h1>
+      <p>Boxing Club</p>
+    </header>
+
+    <section class="cta">
+      <h2>Scan to Join the Club</h2>
+      <p>Point your phone camera at the code</p>
+    </section>
+
+    <div class="qr">
+      <img src="website-qr.svg" alt="QR code linking to www.lafamiliashowtimeboxing.com">
+    </div>
+
+    <footer class="footer">
+      <p class="url">www.lafamiliashowtimeboxing.com</p>
+      <p class="perks">Memberships <b>•</b> Day Passes <b>•</b> Class Schedule</p>
+    </footer>
+  </main>
+</body>
+</html>

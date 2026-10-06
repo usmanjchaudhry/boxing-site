@@ -138,17 +138,16 @@ export async function GET() {
       card: Math.round(card[k] * 100) / 100,
       cash: Math.round(cash[k] * 100) / 100,
     }))
-    const totalRevenue = Math.round(revenue.reduce((s, r) => s + r.revenue, 0) * 100) / 100
     const round2 = (n: number) => Math.round(n * 100) / 100
-    const cardRevenue = round2(revenue.reduce((s, r) => s + r.card, 0))
-    const cashRevenue = round2(revenue.reduce((s, r) => s + r.cash, 0))
-    const thisMonthKey = monthKeys[monthKeys.length - 1]
-    const thisMonth = {
-      label: monthLabel(thisMonthKey),
-      total: round2(card[thisMonthKey] + cash[thisMonthKey]),
-      card: round2(card[thisMonthKey]),
-      cash: round2(cash[thisMonthKey]),
-    }
+    const monthTotals = (key: string) => ({
+      label: monthLabel(key),
+      total: round2(card[key] + cash[key]),
+      card: round2(card[key]),
+      cash: round2(cash[key]),
+    })
+    // This calendar month so far, and the last full calendar month
+    const thisMonth = monthTotals(monthKeys[monthKeys.length - 1])
+    const lastMonth = monthTotals(monthKeys[monthKeys.length - 2])
 
     // 5. Summary
     const activeCount = statusCounts.Active
@@ -164,10 +163,8 @@ export async function GET() {
       planDistribution,
       revenue,
       summary: {
-        totalRevenue,
-        cardRevenue,
-        cashRevenue,
         thisMonth,
+        lastMonth,
         revenueComplete,
         churnRate: cancelledRate,
         avgCheckinsPerDay: Math.round((totalCheckins / 30) * 10) / 10,

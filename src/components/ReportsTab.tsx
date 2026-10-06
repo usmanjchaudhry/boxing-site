@@ -15,10 +15,8 @@ interface ReportsData {
   planDistribution: { plan: string; count: number }[]
   revenue: { month: string; revenue: number; card: number; cash: number }[]
   summary: {
-    totalRevenue: number
-    cardRevenue: number
-    cashRevenue: number
-    thisMonth: { label: string; total: number; card: number; cash: number }
+    thisMonth: MonthTotals
+    lastMonth: MonthTotals
     churnRate: number
     avgCheckinsPerDay: number
     totalCheckins: number
@@ -27,6 +25,8 @@ interface ReportsData {
     revenueComplete?: boolean
   }
 }
+
+interface MonthTotals { label: string; total: number; card: number; cash: number }
 
 const STRIPE_COLOR = '#818cf8'
 const CASH_COLOR = '#f59e0b'
@@ -108,8 +108,8 @@ export default function ReportsTab() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <SummaryCard
           icon={<DollarSign className="w-5 h-5" />}
-          label={summary.revenueComplete === false ? 'Revenue, 6 mo (cash only, card failed)' : 'Revenue (last 6 months)'}
-          value={`$${summary.totalRevenue.toLocaleString()}`}
+          label={summary.revenueComplete === false ? `Revenue, ${summary.lastMonth.label} (cash only, card failed)` : `Revenue last month (${summary.lastMonth.label})`}
+          value={money(summary.lastMonth.total)}
           color="text-green-400"
           bgColor="bg-green-500/10"
         />
@@ -156,10 +156,10 @@ export default function ReportsTab() {
             cash={summary.thisMonth.cash}
           />
           <IncomeSplit
-            title="Last 6 months"
-            total={summary.totalRevenue}
-            card={summary.cardRevenue}
-            cash={summary.cashRevenue}
+            title={`Last month (${summary.lastMonth.label})`}
+            total={summary.lastMonth.total}
+            card={summary.lastMonth.card}
+            cash={summary.lastMonth.cash}
           />
         </div>
       </div>
