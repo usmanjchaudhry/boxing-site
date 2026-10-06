@@ -34,7 +34,7 @@ const stripe = new Stripe(env.STRIPE_SECRET_KEY)
 const supabase = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY)
 
 async function run() {
-  const mode = env.STRIPE_SECRET_KEY?.startsWith('sk_live') ? 'LIVE' : 'TEST'
+  const mode = /^(sk|rk)_live_/.test(env.STRIPE_SECRET_KEY || '') ? 'LIVE' : 'TEST'
   console.log(`🥊 Adding ${PLAN_NAME} ($${PRICE_CENTS / 100}/mo)`)
   console.log(`   env file: ${envPath} | Stripe: ${mode} | Supabase: ${env.NEXT_PUBLIC_SUPABASE_URL}\n`)
 
