@@ -139,6 +139,16 @@ export async function GET() {
       cash: Math.round(cash[k] * 100) / 100,
     }))
     const totalRevenue = Math.round(revenue.reduce((s, r) => s + r.revenue, 0) * 100) / 100
+    const round2 = (n: number) => Math.round(n * 100) / 100
+    const cardRevenue = round2(revenue.reduce((s, r) => s + r.card, 0))
+    const cashRevenue = round2(revenue.reduce((s, r) => s + r.cash, 0))
+    const thisMonthKey = monthKeys[monthKeys.length - 1]
+    const thisMonth = {
+      label: monthLabel(thisMonthKey),
+      total: round2(card[thisMonthKey] + cash[thisMonthKey]),
+      card: round2(card[thisMonthKey]),
+      cash: round2(cash[thisMonthKey]),
+    }
 
     // 5. Summary
     const activeCount = statusCounts.Active
@@ -155,6 +165,9 @@ export async function GET() {
       revenue,
       summary: {
         totalRevenue,
+        cardRevenue,
+        cashRevenue,
+        thisMonth,
         revenueComplete,
         churnRate: cancelledRate,
         avgCheckinsPerDay: Math.round((totalCheckins / 30) * 10) / 10,

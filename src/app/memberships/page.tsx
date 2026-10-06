@@ -99,7 +99,9 @@ export default async function MembershipsPage() {
         )}
 
         {/* Plans Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 sm:gap-8 max-w-3xl mx-auto mb-16">
+        <div className={`grid grid-cols-1 sm:grid-cols-2 gap-6 sm:gap-8 mx-auto mb-16 ${
+          (plans?.length ?? 0) >= 3 ? 'lg:grid-cols-3 max-w-5xl' : 'max-w-3xl'
+        }`}>
           {(plans || []).map((plan) => (
             <PlanCard
               key={plan.id}

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Loader2, TrendingUp, TrendingDown, Users, DollarSign, Activity, BarChart3 } from 'lucide-react'
+import { Loader2, TrendingUp, TrendingDown, Users, DollarSign, Activity, BarChart3, CreditCard, Banknote, Wallet } from 'lucide-react'
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
@@ -13,9 +13,12 @@ interface ReportsData {
   checkinTrend: { date: string; checkins: number }[]
   subscriptionStatus: { status: string; count: number }[]
   planDistribution: { plan: string; count: number }[]
-  revenue: { month: string; revenue: number }[]
+  revenue: { month: string; revenue: number; card: number; cash: number }[]
   summary: {
     totalRevenue: number
+    cardRevenue: number
+    cashRevenue: number
+    thisMonth: { label: string; total: number; card: number; cash: number }
     churnRate: number
     avgCheckinsPerDay: number
     totalCheckins: number
@@ -24,6 +27,13 @@ interface ReportsData {
     revenueComplete?: boolean
   }
 }
+
+const STRIPE_COLOR = '#818cf8'
+const CASH_COLOR = '#f59e0b'
+const MONEY_KEYS = new Set(['revenue', 'card', 'cash'])
+
+const money = (n: number) =>
+  `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
 const STATUS_COLORS: Record<string, string> = {
   Active: '#22c55e',
@@ -41,8 +51,8 @@ const CustomTooltip = ({ active, payload, label }: any) => {
         <p className="text-xs text-zinc-400 mb-1">{label}</p>
         {payload.map((p: any, i: number) => (
           <p key={i} className="text-sm font-bold" style={{ color: p.color }}>
-            {p.name}: {typeof p.value === 'number' && p.name === 'revenue'
-              ? `$${p.value.toLocaleString()}`
+            {p.name}: {typeof p.value === 'number' && MONEY_KEYS.has(p.dataKey)
+              ? money(p.value)
               : p.value}
           </p>
         ))}
@@ -126,34 +136,51 @@ export default function ReportsTab() {
         />
       </div>
 
+      {/* Income Breakdown: Stripe vs in-person cash */}
+      <div className="rounded-2xl bg-zinc-950 border border-white/5 p-4 sm:p-6">
+        <div className="flex items-center gap-2 mb-6">
+          <Wallet className="w-5 h-5 text-green-400" />
+          <h3 className="text-lg font-bold">Income Breakdown</h3>
+          <span className="text-xs text-zinc-500 ml-auto">Stripe vs in-person cash · after refunds</span>
+        </div>
+        {summary.revenueComplete === false && (
+          <p className="mb-4 text-xs text-amber-400">
+            Couldn&apos;t reach Stripe, so card income is missing. Totals below are cash only.
+          </p>
+        )}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <IncomeSplit
+            title={`This month (${summary.thisMonth.label})`}
+            total={summary.thisMonth.total}
+            card={summary.thisMonth.card}
+            cash={summary.thisMonth.cash}
+          />
+          <IncomeSplit
+            title="Last 6 months"
+            total={summary.totalRevenue}
+            card={summary.cardRevenue}
+            cash={summary.cashRevenue}
+          />
+        </div>
+      </div>
+
       {/* Revenue Chart */}
       <div className="rounded-2xl bg-zinc-950 border border-white/5 p-4 sm:p-6">
         <div className="flex items-center gap-2 mb-6">
           <DollarSign className="w-5 h-5 text-green-400" />
           <h3 className="text-lg font-bold">Monthly Revenue</h3>
-          <span className="text-xs text-zinc-500 ml-auto">Card + cash, after refunds · last 6 months</span>
+          <span className="text-xs text-zinc-500 ml-auto">Stripe + cash, after refunds · last 6 months</span>
         </div>
         <ResponsiveContainer width="100%" height={280}>
-          <AreaChart data={data.revenue}>
-            <defs>
-              <linearGradient id="revenueGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#22c55e" stopOpacity={0.3} />
-                <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
-              </linearGradient>
-            </defs>
+          <BarChart data={data.revenue}>
             <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
             <XAxis dataKey="month" stroke="#71717a" fontSize={12} />
             <YAxis stroke="#71717a" fontSize={12} tickFormatter={(v) => `$${v}`} />
-            <Tooltip content={<CustomTooltip />} />
-            <Area
-              type="monotone"
-              dataKey="revenue"
-              stroke="#22c55e"
-              strokeWidth={2}
-              fill="url(#revenueGrad)"
-              name="revenue"
-            />
-          </AreaChart>
+            <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.03)' }} />
+            <Legend />
+            <Bar dataKey="card" stackId="income" fill={STRIPE_COLOR} name="Stripe (card)" />
+            <Bar dataKey="cash" stackId="income" fill={CASH_COLOR} name="Cash" radius={[6, 6, 0, 0]} />
+          </BarChart>
         </ResponsiveContainer>
       </div>
 
@@ -289,6 +316,47 @@ export default function ReportsTab() {
           ) : (
             <p className="text-center py-12 text-zinc-600">No plan data</p>
           )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function IncomeSplit({ title, total, card, cash }: { title: string; total: number; card: number; cash: number }) {
+  const cardPct = total > 0 ? Math.round((card / total) * 100) : 0
+  const cashPct = total > 0 ? 100 - cardPct : 0
+
+  return (
+    <div className="rounded-xl bg-white/[0.02] border border-white/5 p-4 sm:p-5">
+      <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold mb-1">{title}</p>
+      <p className="text-3xl sm:text-4xl font-black text-green-400 mb-4">{money(total)}</p>
+
+      {/* Split bar */}
+      <div className="flex h-3 w-full overflow-hidden rounded-full bg-zinc-800 mb-4">
+        {total > 0 && (
+          <>
+            <div className="h-full transition-all duration-700" style={{ width: `${cardPct}%`, backgroundColor: STRIPE_COLOR }} />
+            <div className="h-full transition-all duration-700" style={{ width: `${cashPct}%`, backgroundColor: CASH_COLOR }} />
+          </>
+        )}
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div className="flex items-start gap-2">
+          <CreditCard className="w-4 h-4 mt-0.5 shrink-0" style={{ color: STRIPE_COLOR }} />
+          <div>
+            <p className="text-xs text-zinc-500">Stripe (card)</p>
+            <p className="text-lg font-bold text-white">{money(card)}</p>
+            <p className="text-xs text-zinc-500">{cardPct}%</p>
+          </div>
+        </div>
+        <div className="flex items-start gap-2">
+          <Banknote className="w-4 h-4 mt-0.5 shrink-0" style={{ color: CASH_COLOR }} />
+          <div>
+            <p className="text-xs text-zinc-500">In-person cash</p>
+            <p className="text-lg font-bold text-white">{money(cash)}</p>
+            <p className="text-xs text-zinc-500">{cashPct}%</p>
+          </div>
         </div>
       </div>
     </div>

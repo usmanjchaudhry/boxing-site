@@ -16,9 +16,11 @@ interface Plan {
 export default function PlanCard({ plan, isCurrentPlan }: { plan: Plan; isCurrentPlan: boolean }) {
   const [loading, setLoading] = useState(false)
 
-  const isDouble = plan.name.toLowerCase().includes('double')
-  const isLegacy = plan.name.toLowerCase().includes('legacy')
-  const isHighlight = isDouble || isLegacy
+  const lowerName = plan.name.toLowerCase()
+  const isLegacy = lowerName.includes('legacy')
+  // Household plans (Double, Family of 4) get the "Best Value" badge
+  const isBestValue = !isLegacy && (lowerName.includes('double') || lowerName.includes('family'))
+  const isHighlight = isBestValue || isLegacy
   const price = (plan.price_cents / 100).toFixed(2)
 
   // Build features based on plan type
@@ -28,7 +30,12 @@ export default function PlanCard({ plan, isCurrentPlan }: { plan: Plan; isCurren
   ]
 
   if (plan.max_dependents > 0) {
-    features.push(`${plan.max_dependents} household members`)
+    // Double's description already spells out who it covers, so skip the headcount line there
+    if (!lowerName.includes('double')) {
+      features.push(
+        `Up to ${plan.max_dependents + 1} people (you + ${plan.max_dependents} dependent${plan.max_dependents === 1 ? '' : 's'})`
+      )
+    }
     features.push('Shared household check-in')
   } else {
     features.push('Individual access')
@@ -69,7 +76,7 @@ export default function PlanCard({ plan, isCurrentPlan }: { plan: Plan; isCurren
         : 'bg-zinc-950 border-white/5 hover:border-white/10'
     }`}>
       {/* Badge */}
-      {isDouble && (
+      {isBestValue && (
         <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 bg-red-600 text-white text-xs font-black rounded-full uppercase tracking-wider shadow-lg">
           Best Value
         </div>
