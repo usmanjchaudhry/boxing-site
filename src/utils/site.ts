@@ -22,3 +22,13 @@ export const SITE = {
   // Add Instagram / Facebook / Yelp / Google Maps URLs here once they exist.
   sameAs: [] as string[],
 } as const
+
+// Only these hosts may be indexed by search engines. Everything else
+// (lafamiliashowtimeboxing.dev, Vercel previews, localhost) gets noindex so
+// Google never lists the dev site or treats it as duplicate content.
+const PRODUCTION_HOSTS = ['lafamiliashowtimeboxing.com', 'www.lafamiliashowtimeboxing.com']
+
+export function isProductionHost(host: string | null | undefined): boolean {
+  if (!host) return false
+  return PRODUCTION_HOSTS.includes(host.split(':')[0].toLowerCase())
+}

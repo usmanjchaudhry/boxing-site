@@ -1,7 +1,16 @@
 import type { MetadataRoute } from 'next'
-import { SITE } from '@/utils/site'
+import { headers } from 'next/headers'
+import { SITE, isProductionHost } from '@/utils/site'
 
-export default function robots(): MetadataRoute.Robots {
+export default async function robots(): Promise<MetadataRoute.Robots> {
+  const h = await headers()
+  const host = h.get('x-forwarded-host') ?? h.get('host')
+
+  // Dev / preview / localhost: block all crawling.
+  if (!isProductionHost(host)) {
+    return { rules: { userAgent: '*', disallow: '/' } }
+  }
+
   return {
     rules: {
       userAgent: '*',
