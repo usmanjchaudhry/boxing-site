@@ -454,6 +454,15 @@ export function buildGuide(role: StaffRole, facts: GuideFacts): GuideSection[] {
           ],
         },
         { type: 'note', tone: 'info', text: 'Cash memberships end on their own when the time runs out. The scanner will say **Membership Expired**. Record a new cash payment to renew.' },
+        {
+          type: 'steps',
+          title: 'Recorded a payment twice by mistake?',
+          steps: [
+            { text: 'Open the **Cash Payments** tab and scroll to **Cash Payment History**.', link: { label: 'Open Cash Payments', tab: 'cash' } },
+            { text: 'Double entries are marked **Possible duplicate**. Find the extra one.' },
+            { text: 'Click **Remove** on that row, then **Yes, Remove Payment**.', detail: 'This only deletes the payment record. The membership stays on. To turn a membership off, use **Cancel** on the Members tab.' },
+          ],
+        },
       ],
     })
   }

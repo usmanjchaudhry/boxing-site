@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { ShieldCheck, RefreshCw, Banknote, Loader2, Search, BookOpen } from 'lucide-react'
+import { ShieldCheck, RefreshCw, Banknote, Loader2, Search, BookOpen, Trash2 } from 'lucide-react'
 import CheckinScanner from '@/components/CheckinScanner'
 import ReportsTab from '@/components/ReportsTab'
 import CheckinsLogTab from '@/components/CheckinsLogTab'
@@ -60,6 +60,23 @@ interface Plan {
   billing_interval: string
 }
 
+/** Row returned by GET /api/admin/cash-payment */
+interface CashPaymentRecord {
+  id: string
+  householdId: string
+  amount_cents: number
+  payment_date: string
+  notes: string | null
+  created_at: string
+  memberName: string
+  planName: string
+  endDate: string | null
+  subStatus: string
+  recordedBy: string
+  /** Other cash payments on the same membership (0 = this is the only one). */
+  otherPaymentsOnSub: number
+}
+
 export default function AdminDashboardClient({ role, guideFacts }: { role: string; guideFacts: GuideFacts }) {
   const [activeTab, setActiveTab] = useState<Tab>('overview')
   const [stats, setStats] = useState<Stats | null>(null)
@@ -74,11 +91,14 @@ export default function AdminDashboardClient({ role, guideFacts }: { role: strin
   const [plans, setPlans] = useState<Plan[]>([])
   const [cashForm, setCashForm] = useState({ profileId: '', planId: '', paymentDate: new Date().toISOString().split('T')[0], notes: '' })
   const [cashSubmitting, setCashSubmitting] = useState(false)
-  const [cashHistory, setCashHistory] = useState<any[]>([])
+  const [cashHistory, setCashHistory] = useState<CashPaymentRecord[]>([])
   const [cashMessage, setCashMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null)
   const [memberSearch, setMemberSearch] = useState('')
   const [showMemberDropdown, setShowMemberDropdown] = useState(false)
   const [membersTabSearch, setMembersTabSearch] = useState('')
+  // Removing a cash payment (e.g. recorded twice by mistake)
+  const [deletingCash, setDeletingCash] = useState<CashPaymentRecord | null>(null)
+  const [cashDeleting, setCashDeleting] = useState(false)
   
   // Per-tab loading flags (true until first fetch completes)
   const [paymentsLoading, setPaymentsLoading] = useState(true)
@@ -182,6 +202,33 @@ export default function AdminDashboardClient({ role, guideFacts }: { role: strin
   }, [activeTab, payments.length, members.length, plans.length, fetchPayments, fetchMembers])
 
   const visibleTabs = tabsForRole(role)
+
+  const refreshCashHistory = async () => {
+    const histRes = await fetch('/api/admin/cash-payment')
+    const histData = await histRes.json()
+    if (histData.payments) setCashHistory(histData.payments)
+  }
+
+  const confirmDeleteCash = async () => {
+    if (!deletingCash) return
+    setCashDeleting(true)
+    try {
+      const res = await fetch(`/api/admin/cash-payment?id=${encodeURIComponent(deletingCash.id)}`, { method: 'DELETE' })
+      const data = await res.json()
+      setCashMessage(res.ok ? { type: 'success', text: data.message } : { type: 'error', text: data.error || 'Failed to remove payment' })
+      if (res.ok) await refreshCashHistory()
+    } catch (err) {
+      setCashMessage({ type: 'error', text: err instanceof Error ? err.message : 'Failed to remove payment' })
+    } finally {
+      setCashDeleting(false)
+      setDeletingCash(null)
+    }
+  }
+
+  // Same member + same day + same amount recorded more than once = likely a double entry
+  const cashDupKey = (cp: CashPaymentRecord) => `${cp.householdId}|${cp.payment_date}|${cp.amount_cents}`
+  const cashDupCounts: Record<string, number> = {}
+  for (const cp of cashHistory) cashDupCounts[cashDupKey(cp)] = (cashDupCounts[cashDupKey(cp)] || 0) + 1
 
   // Opening a tab from the guide should land at the top of that tab
   const goToTab = (tab: Tab) => {
@@ -601,9 +648,7 @@ export default function AdminDashboardClient({ role, guideFacts }: { role: strin
                     setCashForm(f => ({ ...f, profileId: '', planId: '', notes: '' }))
                     setMemberSearch('')
                     // Refresh history
-                    const histRes = await fetch('/api/admin/cash-payment')
-                    const histData = await histRes.json()
-                    if (histData.payments) setCashHistory(histData.payments)
+                    await refreshCashHistory()
                     // Refresh members to show updated status
                     fetchMembers()
                   }
@@ -736,7 +781,7 @@ export default function AdminDashboardClient({ role, guideFacts }: { role: strin
           <div className="rounded-2xl bg-zinc-950 border border-white/5 overflow-hidden">
             <div className="p-4 sm:p-6 border-b border-white/5">
               <h3 className="text-lg font-bold">Cash Payment History</h3>
-              <p className="text-xs text-zinc-500 mt-1">All recorded cash payments · {cashHistory.length} records</p>
+              <p className="text-xs text-zinc-500 mt-1">All recorded cash payments · {cashHistory.length} records · Use <span className="text-zinc-300">Remove</span> to delete one entered by mistake</p>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -748,16 +793,22 @@ export default function AdminDashboardClient({ role, guideFacts }: { role: strin
                     <th className="text-left px-4 sm:px-6 py-3 font-semibold hidden sm:table-cell">Paid On</th>
                     <th className="text-left px-4 sm:px-6 py-3 font-semibold hidden sm:table-cell">Expires</th>
                     <th className="text-left px-4 sm:px-6 py-3 font-semibold hidden md:table-cell">Notes</th>
+                    <th className="text-right px-4 sm:px-6 py-3 font-semibold"><span className="sr-only">Actions</span></th>
                   </tr>
                 </thead>
                 <tbody>
                   {cashHistory.length === 0 ? (
-                    <tr><td colSpan={6} className="px-6 py-8 text-center text-zinc-600">No cash payments recorded yet</td></tr>
+                    <tr><td colSpan={7} className="px-6 py-8 text-center text-zinc-600">No cash payments recorded yet</td></tr>
                   ) : (
-                    cashHistory.map((cp: any) => (
+                    cashHistory.map(cp => (
                       <tr key={cp.id} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
                         <td className="px-4 sm:px-6 py-3 font-medium text-white">
                           {cp.memberName || 'Unknown'}
+                          {cashDupCounts[cashDupKey(cp)] > 1 && (
+                            <span className="ml-2 inline-block px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide bg-amber-500/10 text-amber-400 align-middle">
+                              Possible duplicate
+                            </span>
+                          )}
                         </td>
                         <td className="px-4 sm:px-6 py-3 font-bold text-green-400">
                           ${(cp.amount_cents / 100).toFixed(2)}
@@ -766,19 +817,31 @@ export default function AdminDashboardClient({ role, guideFacts }: { role: strin
                           {cp.planName || 'Unknown'}
                         </td>
                         <td className="px-4 sm:px-6 py-3 text-zinc-300 hidden sm:table-cell">
-                          {new Date(cp.payment_date).toLocaleDateString()}
+                          {new Date(cp.payment_date).toLocaleDateString(undefined, { timeZone: 'UTC' })}
                         </td>
                         <td className="px-4 sm:px-6 py-3 hidden sm:table-cell">
                           {cp.endDate ? (
                             <span className={`text-xs font-bold ${
                               new Date(cp.endDate) < new Date() ? 'text-red-400' : 'text-green-400'
                             }`}>
-                              {new Date(cp.endDate).toLocaleDateString()}
+                              {new Date(cp.endDate).toLocaleDateString(undefined, { timeZone: 'UTC' })}
                             </span>
                           ) : '—'}
                         </td>
                         <td className="px-4 sm:px-6 py-3 text-zinc-500 text-xs hidden md:table-cell">
                           {cp.notes || '—'}
+                        </td>
+                        <td className="px-4 sm:px-6 py-3 text-right">
+                          <button
+                            id={`cash-remove-${cp.id}`}
+                            type="button"
+                            onClick={() => setDeletingCash(cp)}
+                            title="Remove this payment"
+                            className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-bold text-red-400 hover:text-white hover:bg-red-600 transition-colors"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span className="hidden sm:inline">Remove</span>
+                          </button>
                         </td>
                       </tr>
                     ))
@@ -925,6 +988,50 @@ export default function AdminDashboardClient({ role, guideFacts }: { role: strin
                 className="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-white text-sm font-bold rounded-xl transition-colors border border-white/5"
               >
                 Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Remove Cash Payment Modal */}
+      {deletingCash && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-zinc-950 border border-white/10 rounded-2xl w-full max-w-sm p-6 shadow-2xl relative text-center">
+            <div className="w-12 h-12 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Trash2 className="w-6 h-6" />
+            </div>
+            <h3 className="text-xl font-black text-white mb-2">Remove Cash Payment?</h3>
+            <p className="text-sm text-zinc-400 mb-4">
+              Remove the <span className="font-bold text-white">${(deletingCash.amount_cents / 100).toFixed(2)}</span> payment for{' '}
+              <span className="font-bold text-white">{deletingCash.memberName}</span> on{' '}
+              <span className="font-bold text-white">{new Date(deletingCash.payment_date).toLocaleDateString(undefined, { timeZone: 'UTC' })}</span>?
+              This can’t be undone.
+            </p>
+            {deletingCash.otherPaymentsOnSub === 0 ? (
+              <p className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-xl px-3 py-2 mb-6 text-left">
+                This is the only cash payment on this membership. Removing it will <span className="font-bold">not</span> turn the membership off. To end it, use <span className="font-bold">Cancel</span> on the Members tab.
+              </p>
+            ) : (
+              <p className="text-xs text-zinc-500 mb-6">The membership stays active. Only this payment record is removed.</p>
+            )}
+
+            <div className="flex flex-col gap-3">
+              <button
+                id="cash-remove-confirm"
+                onClick={confirmDeleteCash}
+                disabled={cashDeleting}
+                className="w-full py-3 bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white text-sm font-bold rounded-xl transition-colors flex items-center justify-center gap-2"
+              >
+                {cashDeleting && <Loader2 className="w-4 h-4 animate-spin" />}
+                {cashDeleting ? 'Removing...' : 'Yes, Remove Payment'}
+              </button>
+              <button
+                onClick={() => setDeletingCash(null)}
+                disabled={cashDeleting}
+                className="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-white text-sm font-bold rounded-xl transition-colors border border-white/5"
+              >
+                Keep it
               </button>
             </div>
           </div>

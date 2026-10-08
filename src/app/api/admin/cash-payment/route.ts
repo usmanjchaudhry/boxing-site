@@ -200,6 +200,18 @@ export async function GET(request: NextRequest) {
     subMap[s.id] = s
   }
 
+  // How many cash payments each subscription has in total, so the UI can warn
+  // when removing the only payment behind a membership.
+  const { data: subPayments } = await db
+    .from('cash_payments')
+    .select('subscription_id')
+    .in('subscription_id', subIds.length ? subIds : ['none'])
+
+  const subPaymentCount: Record<string, number> = {}
+  for (const sp of subPayments || []) {
+    subPaymentCount[sp.subscription_id] = (subPaymentCount[sp.subscription_id] || 0) + 1
+  }
+
   // Get primary member names per household
   const hhIds = [...new Set((rawPayments || []).map(p => p.household_id))]
   const { data: hhMembers } = await db
@@ -232,6 +244,7 @@ export async function GET(request: NextRequest) {
     const plan = sub?.membership_plans as any
     return {
       id: p.id,
+      householdId: p.household_id,
       amount_cents: p.amount_cents,
       payment_date: p.payment_date,
       notes: p.notes,
@@ -241,9 +254,50 @@ export async function GET(request: NextRequest) {
       endDate: sub?.end_date || null,
       subStatus: sub?.status || 'Unknown',
       recordedBy: adminMap[p.recorded_by] || 'Admin',
+      otherPaymentsOnSub: Math.max((subPaymentCount[p.subscription_id] || 1) - 1, 0),
     }
   })
 
   return NextResponse.json({ payments })
+}
+
+// DELETE /api/admin/cash-payment?id=<uuid> — Remove a cash payment record
+// (e.g. one that was accidentally recorded twice).
+// Only the payment record is removed; the membership itself is left as-is.
+// Use Cancel on the Members tab to turn a membership off.
+export async function DELETE(request: NextRequest) {
+  const admin = await verifyAdmin()
+  if (!admin) {
+    return NextResponse.json({ error: 'Unauthorized — admin only' }, { status: 403 })
+  }
+
+  const id = request.nextUrl.searchParams.get('id')
+  if (!id) {
+    return NextResponse.json({ error: 'Missing payment id' }, { status: 400 })
+  }
+
+  const db = getAdminSupabase()
+  const { data: deleted, error } = await db
+    .from('cash_payments')
+    .delete()
+    .eq('id', id)
+    .select('id, household_id, subscription_id, amount_cents, payment_date')
+
+  if (error) {
+    console.error('Failed to delete cash payment:', error)
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+  if (!deleted || deleted.length === 0) {
+    return NextResponse.json({ error: 'Payment not found (it may already be removed)' }, { status: 404 })
+  }
+
+  const p = deleted[0]
+  // Audit trail in server logs: who removed what.
+  console.info('Cash payment removed', { paymentId: p.id, removedBy: admin.id, householdId: p.household_id, subscriptionId: p.subscription_id, amountCents: p.amount_cents, paymentDate: p.payment_date })
+
+  return NextResponse.json({
+    success: true,
+    message: `Removed $${(p.amount_cents / 100).toFixed(2)} cash payment from ${p.payment_date}.`,
+  })
 }
 
