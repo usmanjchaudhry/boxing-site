@@ -1,8 +1,53 @@
 import Link from "next/link";
 import Image from "next/image";
+import type { Metadata } from "next";
 import { ArrowRight, Trophy, Users, CalendarDays, MapPin, Phone, Mail, Clock } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import { createClient } from "@/utils/supabase/server";
+import { SITE } from "@/utils/site";
+
+export const metadata: Metadata = {
+  alternates: { canonical: "/" },
+};
+
+// Structured data so Google understands this is a local gym with a physical
+// address and hours. Validate at https://search.google.com/test/rich-results
+const gymJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "ExerciseGym",
+  "@id": `${SITE.url}/#gym`,
+  name: SITE.name,
+  description: SITE.description,
+  url: SITE.url,
+  logo: `${SITE.url}/logo.jpg`,
+  image: [`${SITE.url}/gym-interior.jpg`, `${SITE.url}/gym-sparring.jpg`, `${SITE.url}/gym-class.jpg`],
+  telephone: SITE.phone,
+  email: SITE.email,
+  address: {
+    "@type": "PostalAddress",
+    streetAddress: SITE.address.street,
+    addressLocality: SITE.address.city,
+    addressRegion: SITE.address.region,
+    postalCode: SITE.address.postalCode,
+    addressCountry: SITE.address.country,
+  },
+  areaServed: ["Reseda", "Northridge", "Van Nuys", "Canoga Park", "Winnetka", "Lake Balboa", "San Fernando Valley"],
+  openingHoursSpecification: [
+    {
+      "@type": "OpeningHoursSpecification",
+      dayOfWeek: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
+      opens: "05:00",
+      closes: "22:00",
+    },
+    {
+      "@type": "OpeningHoursSpecification",
+      dayOfWeek: ["Saturday", "Sunday"],
+      opens: "06:00",
+      closes: "15:00",
+    },
+  ],
+  ...(SITE.sameAs.length ? { sameAs: SITE.sameAs } : {}),
+};
 
 export default async function Home() {
   const supabase = await createClient()
@@ -11,7 +56,11 @@ export default async function Home() {
 
   return (
     <div className="min-h-screen bg-black text-zinc-100 selection:bg-red-500 selection:text-white font-sans">
-      
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(gymJsonLd).replace(/</g, "\\u003c") }}
+      />
+
       <Navbar />
 
       {/* Hero Section */}
