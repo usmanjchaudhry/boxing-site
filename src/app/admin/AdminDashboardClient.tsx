@@ -89,7 +89,7 @@ export default function AdminDashboardClient({ role, guideFacts }: { role: strin
   
   // Cash payment state
   const [plans, setPlans] = useState<Plan[]>([])
-  const [cashForm, setCashForm] = useState({ profileId: '', planId: '', paymentDate: new Date().toISOString().split('T')[0], notes: '' })
+  const [cashForm, setCashForm] = useState({ profileId: '', planId: '', paymentDate: new Date().toISOString().split('T')[0], notes: '', amount: '' })
   const [cashSubmitting, setCashSubmitting] = useState(false)
   const [cashHistory, setCashHistory] = useState<CashPaymentRecord[]>([])
   const [cashMessage, setCashMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null)
@@ -645,7 +645,7 @@ export default function AdminDashboardClient({ role, guideFacts }: { role: strin
                     setCashMessage({ type: 'error', text: data.error })
                   } else {
                     setCashMessage({ type: 'success', text: data.message })
-                    setCashForm(f => ({ ...f, profileId: '', planId: '', notes: '' }))
+                    setCashForm(f => ({ ...f, profileId: '', planId: '', notes: '', amount: '' }))
                     setMemberSearch('')
                     // Refresh history
                     await refreshCashHistory()
@@ -720,7 +720,11 @@ export default function AdminDashboardClient({ role, guideFacts }: { role: strin
                 <select
                   required
                   value={cashForm.planId}
-                  onChange={(e) => setCashForm(f => ({ ...f, planId: e.target.value }))}
+                  onChange={(e) => {
+                    // Pre-fill the amount with the plan price; staff can change it
+                    const p = plans.find(pl => pl.id === e.target.value)
+                    setCashForm(f => ({ ...f, planId: e.target.value, amount: p ? (p.price_cents / 100).toFixed(2) : '' }))
+                  }}
                   className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none"
                 >
                   <option value="" className="bg-zinc-900">Select plan...</option>
@@ -730,6 +734,25 @@ export default function AdminDashboardClient({ role, guideFacts }: { role: strin
                     </option>
                   ))}
                 </select>
+              </div>
+
+              {/* Amount Paid */}
+              <div>
+                <label htmlFor="cash-amount" className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-1.5">Amount Paid ($)</label>
+                <input
+                  id="cash-amount"
+                  type="number"
+                  inputMode="decimal"
+                  min="0.01"
+                  max="10000"
+                  step="0.01"
+                  required
+                  value={cashForm.amount}
+                  onChange={(e) => setCashForm(f => ({ ...f, amount: e.target.value }))}
+                  placeholder="Pick a plan first"
+                  className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none placeholder:text-zinc-600"
+                />
+                <p className="text-[11px] text-zinc-500 mt-1">Filled in with the plan price. Change it if they paid a different amount.</p>
               </div>
 
               {/* Payment Date */}
@@ -760,7 +783,7 @@ export default function AdminDashboardClient({ role, guideFacts }: { role: strin
               <div className="sm:col-span-2 flex items-center gap-4">
                 <button
                   type="submit"
-                  disabled={cashSubmitting || !cashForm.profileId || !cashForm.planId}
+                  disabled={cashSubmitting || !cashForm.profileId || !cashForm.planId || !(Number(cashForm.amount) > 0)}
                   className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white font-bold px-6 py-3 rounded-xl transition-colors active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {cashSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Banknote className="w-4 h-4" />}

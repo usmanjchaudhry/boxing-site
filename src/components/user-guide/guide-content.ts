@@ -449,7 +449,7 @@ export function buildGuide(role: StaffRole, facts: GuideFacts): GuideSection[] {
             { text: 'The customer needs an account first (see \u201cHelping a customer sign up\u201d).' },
             { text: 'Open the **Cash Payments** tab.', link: { label: 'Open Cash Payments', tab: 'cash' } },
             { text: 'In **Member**, type their name and pick them from the list.' },
-            { text: 'Choose the **Plan** and the **Payment Date**. Add a note if you like (for example, \u201cPaid $225 cash\u201d).' },
+            { text: 'Choose the **Plan** and the **Payment Date**. Add a note if you like.', detail: 'The amount fills in with the plan price. If they paid a different amount, type what they actually paid. The plan still decides how long the membership lasts.' },
             { text: 'Click **Record Payment & Activate**. Their membership turns on, and the end date is worked out for you.' },
           ],
         },

@@ -32,10 +32,20 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized — admin only' }, { status: 403 })
   }
 
-  const { profileId, planId, paymentDate, notes } = await request.json()
+  const { profileId, planId, paymentDate, notes, amount } = await request.json()
 
   if (!profileId || !planId || !paymentDate) {
     return NextResponse.json({ error: 'Missing required fields: profileId, planId, paymentDate' }, { status: 400 })
+  }
+
+  // Optional custom amount in dollars (e.g. "150" or 150.5). Blank = the plan price.
+  let customCents: number | null = null
+  if (amount !== undefined && amount !== null && amount !== '') {
+    const dollars = Number(amount)
+    if (!Number.isFinite(dollars) || dollars <= 0 || dollars > 10000) {
+      return NextResponse.json({ error: 'Amount must be between $0.01 and $10,000.' }, { status: 400 })
+    }
+    customCents = Math.round(dollars * 100)
   }
 
   const db = getAdminSupabase()
@@ -61,6 +71,7 @@ export async function POST(request: NextRequest) {
   if (!plan) {
     return NextResponse.json({ error: 'Plan not found' }, { status: 404 })
   }
+  const amountCents = customCents ?? plan.price_cents
 
   // 3. Calculate end date based on billing interval
   const startDate = new Date(paymentDate)
@@ -143,7 +154,7 @@ export async function POST(request: NextRequest) {
     .insert({
       subscription_id: subscriptionId,
       household_id: hm.household_id,
-      amount_cents: plan.price_cents,
+      amount_cents: amountCents,
       payment_date: startDateStr,
       recorded_by: admin.id,
       notes: notes || null,
@@ -156,13 +167,13 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({
     success: true,
-    message: `Cash payment recorded. ${plan.name} active until ${endDateStr}.`,
+    message: `Cash payment of $${(amountCents / 100).toFixed(2)} recorded. ${plan.name} active until ${endDateStr}.`,
     subscription: {
       id: subscriptionId,
       planName: plan.name,
       startDate: startDateStr,
       endDate: endDateStr,
-      amountPaid: `$${(plan.price_cents / 100).toFixed(2)}`,
+      amountPaid: `$${(amountCents / 100).toFixed(2)}`,
     }
   })
 }
