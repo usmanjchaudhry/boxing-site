@@ -4,6 +4,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { stripe } from '@/utils/stripe/server'
 import { getServiceClient, getStaffProfile } from '@/utils/auth/staff'
 import { DEFAULT_TIMEZONE, addDays, localDateString, zonedMidnightUtc } from '@/utils/timezone'
+import { cashMembershipEnded } from '@/utils/membership-expiry'
 
 /**
  * Admin reports. All dates are grouped in the gym's timezone (Vercel runs in UTC),
@@ -96,7 +97,7 @@ export async function GET() {
     const statusCounts: Record<string, number> = { Active: 0, Past_Due: 0, Frozen: 0, Cancelled: 0 }
     const planCounts: Record<string, number> = {}
     for (const s of subs ?? []) {
-      const expiredCash = s.status === 'Active' && s.payment_method === 'cash' && s.end_date && now > new Date(s.end_date)
+      const expiredCash = cashMembershipEnded(s, now, tz)
       const status = expiredCash ? 'Cancelled' : s.status
       if (status in statusCounts) statusCounts[status]++
       if (status === 'Active') {

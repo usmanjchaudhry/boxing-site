@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { CheckinMethod, CheckinResult } from '@/utils/checkin-code'
 import { DEFAULT_TIMEZONE, startOfTodayIn } from '@/utils/timezone'
 import { effectiveDailyLimit } from '@/utils/plan-rules'
+import { cashMembershipEnded, formatEndDate } from '@/utils/membership-expiry'
 
 /**
  * Check-in domain service.
@@ -75,7 +76,8 @@ async function findDayPassAccess(db: SupabaseClient, profileId: string): Promise
 async function evaluateMembership(
   db: SupabaseClient,
   profileId: string,
-  startOfToday: Date
+  startOfToday: Date,
+  timeZone: string
 ): Promise<AccessDecision> {
   const { data: hm } = await db
     .from('household_members')
@@ -121,8 +123,8 @@ async function evaluateMembership(
       return NO_ACCESS
   }
 
-  // Cash subscriptions carry an end_date and expire automatically
-  if (subscription.end_date && new Date() > new Date(subscription.end_date)) {
+  // Cash memberships end on their own at the start of their end date (gym time)
+  if (cashMembershipEnded(subscription, new Date(), timeZone)) {
     await db
       .from('subscriptions')
       .update({ status: 'Cancelled' })
@@ -132,7 +134,7 @@ async function evaluateMembership(
       granted: false,
       displayFlag: 'Membership Expired',
       loggedFlag: 'Payment Due',
-      message: `Membership expired on ${new Date(subscription.end_date).toLocaleDateString()}. Please renew.`,
+      message: `Cash membership ended on ${formatEndDate(subscription.end_date as string)}. Please renew.`,
     }
   }
 
@@ -223,7 +225,7 @@ export async function processCheckin(
   const startOfToday = startOfTodayIn(timeZone)
   let access =
     (await findDayPassAccess(db, profileId)) ??
-    (await evaluateMembership(db, profileId, startOfToday))
+    (await evaluateMembership(db, profileId, startOfToday, timeZone))
 
   // Denied after already using a day pass today: say so, so staff know why
   if (!access.granted) {

@@ -13,6 +13,7 @@ import DuplicateSubscriptionAlert from '@/components/DuplicateSubscriptionAlert'
 import { getBillingSubscriptions, type BillingSubscription } from '@/utils/stripe-duplicates'
 import DashboardLiveSync from '@/components/DashboardLiveSync'
 import { getServiceClient } from '@/utils/auth/staff'
+import { cashMembershipEnded } from '@/utils/membership-expiry'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -63,8 +64,8 @@ export default async function DashboardPage() {
       .maybeSingle()
 
     if (sub) {
-      // Auto-expire cash subscriptions past their end_date
-      if (sub.status === 'Active' && sub.end_date && new Date(sub.end_date) < new Date()) {
+      // Auto-expire cash memberships at the start of their end date (same rule as the scanner)
+      if (cashMembershipEnded(sub)) {
         await supabase
           .from('subscriptions')
           .update({ status: 'Cancelled' })

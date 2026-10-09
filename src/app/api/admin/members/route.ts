@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/utils/supabase/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
+import { cashMembershipEnded } from '@/utils/membership-expiry'
 
 function getAdminSupabase() {
   return createAdminClient(
@@ -69,10 +70,10 @@ export async function GET(request: NextRequest) {
 
   // Cash memberships end on their own. They used to flip to Cancelled only when the
   // member scanned or opened their dashboard, so staff still saw "Active" here.
-  // Same rule as the scanner (now > end_date); also saved so every screen agrees.
+  // Same rule as the scanner (cashMembershipEnded); also saved so every screen agrees.
   const now = new Date()
   const expiredHouseholds = (subs || [])
-    .filter(s => s.status === 'Active' && s.payment_method === 'cash' && s.end_date && now > new Date(s.end_date))
+    .filter(s => cashMembershipEnded(s, now))
     .map(s => s.household_id)
   if (expiredHouseholds.length > 0) {
     await db.from('subscriptions').update({ status: 'Cancelled' })
