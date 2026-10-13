@@ -280,7 +280,11 @@ export function buildGuide(role: StaffRole, facts: GuideFacts): GuideSection[] {
           title: '2. Sign the waiver',
           steps: [
             { text: 'Tap the ☰ menu, then **Dashboard**.' },
-            { text: 'The waiver pops up the first time. They read it, sign with their finger, and submit.', detail: 'They can\u2019t check in without a signed waiver.' },
+            {
+              text: 'The waiver pops up the first time. They read it, initial each marked section, check the boxes, type their name, and sign with their finger.',
+              detail: 'There are two documents: the **Liability Waiver** and the **Photo & Video Release**. Both are required. They can\u2019t check in until both are signed.',
+            },
+            { text: 'A copy of what they signed is emailed to them.' },
           ],
         },
         {
@@ -327,7 +331,10 @@ export function buildGuide(role: StaffRole, facts: GuideFacts): GuideSection[] {
             { text: 'The account holder signs in on their phone and taps **Dashboard**.' },
             { text: 'Scroll to **My Household**, then **Add a Family Member**.' },
             { text: 'Type their first name, last name, and date of birth. Tap **Add to Household**.' },
-            { text: 'A waiver pops up for the new person. The account holder (parent or guardian) signs it for them.' },
+            {
+              text: 'A waiver pops up for the new person. For a kid under 18, the parent or guardian signs it for them.',
+              detail: 'An adult (18+) must sign their **own** waiver. The account holder can hand them the phone, or tap **Email a link** so they sign on their own phone.',
+            },
             { text: 'Their QR code now shows under **Gym Check-in QR Codes** on the account holder\u2019s Dashboard.' },
           ],
         },
@@ -482,7 +489,7 @@ export function buildGuide(role: StaffRole, facts: GuideFacts): GuideSection[] {
           { q: 'The customer forgot their password.', a: 'On the sign-in page, tap **Forgot password?** and enter their email. They get a link to make a new one.' },
           { q: 'They can\u2019t find their QR code.', a: 'Sign in, tap **Dashboard**, and scroll to **Gym Check-in QR Codes**. If a waiver pops up first, it must be signed before they can scan.' },
           { q: 'The scanner says \u201cPayment Due\u201d.', a: 'Their card was declined, so they can\u2019t check in on the membership until it\u2019s fixed. Ask the owner to help them update their card. They can buy a day pass to train today.' },
-          { q: 'The scanner says \u201cWaiver Required\u201d.', a: 'They open their Dashboard and sign the waiver that pops up, then scan again.' },
+          { q: 'The scanner says \u201cWaiver Required\u201d.', a: 'Read the message under it. They open their Dashboard and sign what pops up, then scan again. Kids\u2019 waivers must be re-signed by a parent **every year**, and everyone re-signs when the waiver is updated. An adult in someone else\u2019s household signs their own (the account holder can email them a link from **My Household**).' },
           { q: 'A family member can\u2019t get in on the membership.', a: 'Check their plan covers family (see \u201cFamily members\u201d). If not, they can buy a day pass for that person.' },
         ],
       },
@@ -495,7 +502,7 @@ export function buildGuide(role: StaffRole, facts: GuideFacts): GuideSection[] {
 /** Messages the scanner can show, in the order the guide lists them. */
 export const SCAN_RESULTS: { flag: string; status: 'allowed' | 'denied' | 'error'; meaning: string; action?: string }[] = [
   { flag: 'Checked In', status: 'allowed', meaning: 'Everything is good.', action: 'Let them in.' },
-  { flag: 'Waiver Required', status: 'denied', meaning: 'They haven\u2019t signed the waiver.' },
+  { flag: 'Waiver Required', status: 'denied', meaning: 'Their waiver is missing, out of date, or (for kids) more than a year old.' },
   { flag: 'Payment Due', status: 'denied', meaning: 'Their last card payment failed.' },
   { flag: 'Membership Expired', status: 'denied', meaning: 'Their cash membership has run out.' },
   { flag: 'Daily Limit Reached', status: 'denied', meaning: 'Their family plan has already let in the most people allowed today.' },

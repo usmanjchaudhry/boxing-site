@@ -45,6 +45,8 @@ interface Member {
   subscriptionStatus: string
   planName: string
   hasWaiver: boolean
+  waiverState?: 'signed' | 'expired' | 'outdated' | 'missing' | 'unknown'
+  waiverId?: string | null
   joinedAt: string
   stripeCustomerId: string | null
   primaryName: string | null
@@ -564,8 +566,12 @@ export default function AdminDashboardClient({ role, guideFacts }: { role: strin
                       </span>
                     </td>
                     <td className="px-4 sm:px-6 py-3 hidden sm:table-cell">
-                      {m.hasWaiver 
-                        ? <span className="text-green-400 text-xs font-bold">✓ Signed</span>
+                      {m.hasWaiver
+                        ? (m.waiverId
+                            ? <a href={`/waivers/${m.waiverId}`} target="_blank" rel="noopener noreferrer" className="text-green-400 text-xs font-bold hover:underline">✓ Signed</a>
+                            : <span className="text-green-400 text-xs font-bold">✓ Signed</span>)
+                        : m.waiverState === 'expired' ? <span className="text-amber-400 text-xs font-bold">⚠ Expired</span>
+                        : m.waiverState === 'outdated' ? <span className="text-amber-400 text-xs font-bold">⚠ Update Needed</span>
                         : <span className="text-red-400 text-xs font-bold">✗ Missing</span>
                       }
                     </td>

@@ -3,6 +3,7 @@ import type { CheckinMethod, CheckinResult } from '@/utils/checkin-code'
 import { DEFAULT_TIMEZONE, startOfTodayIn } from '@/utils/timezone'
 import { effectiveDailyLimit } from '@/utils/plan-rules'
 import { cashMembershipEnded, formatEndDate } from '@/utils/membership-expiry'
+import { getWaiverStatuses, waiverDenialMessage } from '@/utils/waivers'
 
 /**
  * Check-in domain service.
@@ -249,22 +250,26 @@ export async function processCheckin(
     }
   }
 
-  // 3. Waiver — required for everyone, including day passes
-  const { data: waivers } = await db
-    .from('waivers')
-    .select('id')
-    .eq('participant_id', profileId)
-    .eq('is_valid', true)
-    .limit(1)
+  // 3. Waiver — current version of every required document, for everyone (including day passes)
+  let waiverStatus
+  try {
+    waiverStatus = (await getWaiverStatuses(db, [profile], timeZone)).get(profile.id)
+  } catch (e) {
+    console.error('[checkin] Waiver check failed:', e)
+    return {
+      httpStatus: 500,
+      body: { status: 'error', flag: 'Error', message: 'Could not check the waiver. Please scan again.' },
+    }
+  }
 
-  if (!waivers || waivers.length === 0) {
+  if (!waiverStatus?.complete) {
     await log('Waiver Expired', access.passIdForLog)
     return {
       httpStatus: 200,
       body: {
         status: 'denied',
         flag: 'Waiver Required',
-        message: 'No signed waiver on file. Ask the member to sign it in the app.',
+        message: waiverStatus ? waiverDenialMessage(waiverStatus) : 'No signed waiver on file. Ask the member to sign it in the app.',
         member: profile,
       },
     }

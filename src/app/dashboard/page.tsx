@@ -3,8 +3,9 @@ export const dynamic = 'force-dynamic'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/utils/supabase/server'
-import WaiverPad from '@/components/WaiverPad'
-import { signWaiver } from './actions'
+import WaiverFlow, { type PendingParticipant } from '@/components/waiver/WaiverFlow'
+import { signWaivers, sendWaiverLink } from './actions'
+import { getWaiverStatuses, toPendingDocuments, type WaiverStatus, type ParticipantInput } from '@/utils/waivers'
 import Navbar from '@/components/Navbar'
 import AddDependentForm from '@/components/AddDependentForm'
 import MemberQRCode from '@/components/MemberQRCode'
@@ -15,7 +16,8 @@ import DashboardLiveSync from '@/components/DashboardLiveSync'
 import { getServiceClient } from '@/utils/auth/staff'
 import { cashMembershipEnded } from '@/utils/membership-expiry'
 
-export default async function DashboardPage() {
+export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ sign?: string }> }) {
+  const { sign: signParam } = await searchParams
   const supabase = await createClient()
 
   const { data: { user } } = await supabase.auth.getUser()
@@ -24,7 +26,7 @@ export default async function DashboardPage() {
   // 1. Get Primary User's Profile
   const { data: profile } = await supabase
     .from('profiles')
-    .select('id, first_name')
+    .select('id, first_name, last_name, date_of_birth')
     .eq('auth_user_id', user.id)
     .single()
 
@@ -174,60 +176,41 @@ export default async function DashboardPage() {
     }
   }
 
-  // 4. Fetch waiver status for each member
-  let waiverStatusMap: Record<string, boolean> = {}
-  if (householdMembers.length > 0) {
-    const { data: template } = await supabase
-      .from('waiver_templates')
-      .select('id')
-      .eq('is_active', true)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
-
-    if (template) {
-      for (const member of householdMembers) {
-        if (!member.profile) continue
-        const { data: waivers } = await supabase
-          .from('waivers')
-          .select('id')
-          .eq('participant_id', member.profile.id)
-          .eq('waiver_template_id', template.id)
-          .eq('is_valid', true)
-          .limit(1)
-
-        waiverStatusMap[member.profile.id] = !!(waivers && waivers.length > 0)
-      }
-    }
+  // 4. Waiver status for each member (current version of every required document)
+  const waiverMembers: ParticipantInput[] = householdMembers.length > 0
+    ? householdMembers.map(m => m.profile).filter(Boolean)
+    : profile ? [profile] : []
+  let waiverStatuses = new Map<string, WaiverStatus>()
+  let waiverError = false
+  try {
+    // Service role, scoped to this household's own profile ids
+    waiverStatuses = await getWaiverStatuses(getServiceClient(), waiverMembers)
+  } catch (e) {
+    console.error('[dashboard] Waiver status failed:', e)
+    waiverError = true
   }
 
-  // 5. GATEKEEPER: Find the first member missing a waiver
-  let missingWaiverFor: { id: string, name: string } | null = null
-  let activeWaiverText = ""
+  const accountHolderIsMinor = profile ? (waiverStatuses.get(profile.id)?.isMinor ?? false) : false
+  const pendingWaivers: PendingParticipant[] = waiverMembers
+    .map(m => ({ m, s: waiverStatuses.get(m.id) }))
+    .filter(({ s }) => s && !s.complete)
+    .map(({ m, s }) => ({
+      participantId: m.id,
+      name: `${m.first_name ?? ''} ${m.last_name ?? ''}`.trim(),
+      firstName: m.first_name ?? 'This member',
+      isMinor: s!.isMinor,
+      isSelf: m.id === profile?.id,
+      docs: toPendingDocuments(s!),
+    }))
+    // The account holder's own waiver first
+    .sort((a, b) => Number(b.isSelf) - Number(a.isSelf))
 
-  if (profile && householdMembers.length > 0) {
-    const { data: template } = await supabase
-      .from('waiver_templates')
-      .select('id, body_text')
-      .eq('is_active', true)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
-
-    if (template) {
-      for (const member of householdMembers) {
-        if (!member.profile) continue
-        if (!waiverStatusMap[member.profile.id]) {
-          missingWaiverFor = {
-            id: member.profile.id,
-            name: `${member.profile.first_name} ${member.profile.last_name}`
-          }
-          activeWaiverText = template.body_text
-          break
-        }
-      }
-    }
-  }
+  // Waivers the signed-in user can (and must) sign right now block the dashboard.
+  // Ones another adult has to sign can be put off with "Not now".
+  const waiverBlocking = pendingWaivers.some(p =>
+    (p.isSelf && !p.isMinor) || (p.isMinor && !accountHolderIsMinor)
+  )
+  const forceSignId = signParam && pendingWaivers.some(p => p.participantId === signParam) ? signParam : null
 
   const isActive = subscription?.status === 'Active'
 
@@ -235,17 +218,20 @@ export default async function DashboardPage() {
     <div className="min-h-screen bg-black text-white font-sans selection:bg-red-500 selection:text-white relative">
       
       {/* WAIVER OVERLAY */}
-      {missingWaiverFor && (
-        <WaiverPad 
-          waiverText={activeWaiverText} 
-          participantId={missingWaiverFor.id}
-          participantName={missingWaiverFor.name}
-          onSign={signWaiver} 
+      {profile && pendingWaivers.length > 0 && (
+        <WaiverFlow
+          mode="dashboard"
+          participants={pendingWaivers}
+          accountHolderIsMinor={accountHolderIsMinor}
+          forceParticipantId={forceSignId}
+          dismissKey={profile.id}
+          signAction={signWaivers}
+          sendLinkAction={sendWaiverLink}
         />
       )}
 
       {/* DUPLICATE BILLING POPUP (after the waiver is signed, so the two overlays never stack) */}
-      {hasDuplicateBilling && !missingWaiverFor && (
+      {hasDuplicateBilling && !waiverBlocking && (
         <DuplicateSubscriptionAlert
           subscriptions={billingSubscriptions}
           currentSubscriptionId={subscription?.stripe_subscription_id ?? null}
@@ -255,7 +241,12 @@ export default async function DashboardPage() {
 
       <Navbar />
 
-      <main className={`max-w-7xl mx-auto px-4 sm:px-6 py-8 sm:py-12 ${missingWaiverFor ? 'blur-md pointer-events-none' : ''}`}>
+      <main className={`max-w-7xl mx-auto px-4 sm:px-6 py-8 sm:py-12 ${waiverBlocking ? 'blur-md pointer-events-none' : ''}`}>
+        {waiverError && (
+          <div className="mb-6 p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-sm text-red-300">
+            We couldn&apos;t load your waiver status right now. Please refresh in a minute. If this keeps happening, let the front desk know.
+          </div>
+        )}
         <div className="mb-8 sm:mb-12">
           <h1 className="text-2xl sm:text-3xl font-bold mb-2">Welcome back, {profile?.first_name || 'Champion'}.</h1>
           <p className="text-zinc-400 text-sm sm:text-base">Manage your membership, book classes, and track your progress.</p>
@@ -386,20 +377,34 @@ export default async function DashboardPage() {
             {/* List Members */}
             <div className="space-y-3 mb-8">
               {householdMembers.map((m, i) => {
-                const hasSigned = waiverStatusMap[m.profile?.id] || false
+                const status = m.profile ? waiverStatuses.get(m.profile.id) : undefined
+                const reasons = new Set(status?.missing.map(x => x.reason) ?? [])
+                const missingLabel = reasons.has('expired') ? 'Waiver Expired'
+                  : reasons.has('outdated') || reasons.has('now_adult') ? 'Update Needed'
+                  : 'Waiver Missing'
                 return (
-                  <div key={i} className="bg-black border border-white/5 p-4 rounded-xl flex items-center justify-between">
-                    <div>
-                      <p className="font-bold text-white">{m.profile?.first_name} {m.profile?.last_name}</p>
+                  <div key={i} className="bg-black border border-white/5 p-4 rounded-xl flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-bold text-white truncate">{m.profile?.first_name} {m.profile?.last_name}</p>
                       <p className="text-xs text-zinc-500">{m.role}</p>
                     </div>
-                    <div className={`text-xs font-semibold px-2 py-1 rounded-lg ${
-                      hasSigned 
-                        ? 'bg-green-500/10 text-green-500' 
-                        : 'bg-red-500/10 text-red-500'
-                    }`}>
-                      {hasSigned ? 'Waiver ✓' : 'Waiver Missing'}
-                    </div>
+                    {!status ? null : status.complete ? (
+                      <Link
+                        href={status.signedIds.liability ? `/waivers/${status.signedIds.liability}` : '#'}
+                        className="flex-shrink-0 text-xs font-semibold px-2 py-1 rounded-lg bg-green-500/10 text-green-500 hover:bg-green-500/20"
+                        title="View signed waiver"
+                      >
+                        Waiver ✓
+                      </Link>
+                    ) : (
+                      <Link
+                        href={`/dashboard?sign=${m.profile.id}`}
+                        id={`sign-waiver-${m.profile.id}`}
+                        className="flex-shrink-0 text-xs font-semibold px-2 py-1 rounded-lg bg-red-500/10 text-red-500 hover:bg-red-500/20"
+                      >
+                        {missingLabel} · Sign
+                      </Link>
+                    )}
                   </div>
                 )
               })}

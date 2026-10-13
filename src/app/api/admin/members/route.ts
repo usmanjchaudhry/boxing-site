@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/utils/supabase/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { cashMembershipEnded } from '@/utils/membership-expiry'
+import { getWaiverStatuses, type WaiverStatus } from '@/utils/waivers'
 
 function getAdminSupabase() {
   return createAdminClient(
@@ -53,14 +54,22 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: profilesErr.message }, { status: 500 })
   }
 
-  // Get all waivers (by participant_id)
-  const { data: waivers } = await db
-    .from('waivers')
-    .select('participant_id, is_valid')
-
-  const waiverMap: Record<string, boolean> = {}
-  for (const w of waivers || []) {
-    if (w.is_valid) waiverMap[w.participant_id] = true
+  // Waiver status: current version of every required document (same rule as the scanner)
+  let waiverStatuses = new Map<string, WaiverStatus>()
+  try {
+    waiverStatuses = await getWaiverStatuses(db, profiles || [])
+  } catch (e) {
+    console.error('Failed to load waiver statuses:', e)
+  }
+  const waiverInfo = (id: string) => {
+    const s = waiverStatuses.get(id)
+    if (!s) return { hasWaiver: false, waiverState: 'unknown', waiverId: null }
+    const reasons = new Set(s.missing.map(m => m.reason))
+    const waiverState = s.complete ? 'signed'
+      : reasons.has('expired') ? 'expired'
+      : reasons.has('outdated') || reasons.has('now_adult') ? 'outdated'
+      : 'missing'
+    return { hasWaiver: s.complete, waiverState, waiverId: s.signedIds.liability ?? null }
   }
 
   // Get all subscriptions with plan names + stripe subscription ID
@@ -142,7 +151,7 @@ export async function GET(request: NextRequest) {
       householdRole: hm?.role || 'N/A',
       subscriptionStatus,
       planName,
-      hasWaiver: !!waiverMap[p.id],
+      ...waiverInfo(p.id),
       joinedAt: p.created_at,
       stripeCustomerId,
       primaryName,
