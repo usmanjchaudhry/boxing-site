@@ -8,7 +8,7 @@ import WaiverFlow from '@/components/waiver/WaiverFlow'
 import { signViaLink } from './actions'
 
 export const metadata: Metadata = {
-  title: 'Sign Your Waiver | La Familia Showtime Boxing Club',
+  title: 'Sign Your Waiver',
   description: 'Read and sign the La Familia Showtime Boxing Club waiver and photo/video release.',
   robots: { index: false, follow: false },
 }

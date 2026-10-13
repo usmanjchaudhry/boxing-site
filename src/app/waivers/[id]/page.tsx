@@ -9,7 +9,7 @@ import LegalDocument from '@/components/waiver/LegalDocument'
 import PrintButton from './PrintButton'
 
 export const metadata: Metadata = {
-  title: 'Signed Waiver | La Familia Showtime Boxing Club',
+  title: 'Signed Waiver',
   description: 'Signed copy of a La Familia Showtime Boxing Club waiver.',
   robots: { index: false, follow: false },
 }
