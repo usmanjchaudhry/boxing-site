@@ -15,7 +15,7 @@ export const metadata: Metadata = {
 }
 
 const METHOD_LABEL: Record<string, string> = {
-  account_holder: 'Signed in their own account',
+  account_holder: 'Signed by the account holder while logged in to their account',
   in_person_handoff: 'Signed in person on the account holder\'s device',
   email_link: 'Signed through an emailed link',
 }

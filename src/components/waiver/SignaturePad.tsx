@@ -11,15 +11,18 @@ import { useEffect, useRef, useState } from 'react'
 export default function SignaturePad({
   onChange,
   id = 'signature-pad',
+  initial = null,
 }: {
   onChange: (dataUrl: string | null) => void
   id?: string
+  /** A signature drawn earlier (PNG data URL) to show again, e.g. after going Back. */
+  initial?: string | null
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const drawing = useRef(false)
   const last = useRef<{ x: number; y: number } | null>(null)
-  const inkRef = useRef(false)
-  const [hasInk, setHasInk] = useState(false)
+  const inkRef = useRef(!!initial)
+  const [hasInk, setHasInk] = useState(!!initial)
 
   const paintBackground = () => {
     const canvas = canvasRef.current
@@ -37,6 +40,13 @@ export default function SignaturePad({
     canvas.width = Math.round(rect.width * dpr)
     canvas.height = Math.round(rect.height * dpr)
     paintBackground()
+    if (initial) {
+      const img = new Image()
+      img.onload = () => canvas.getContext('2d')?.drawImage(img, 0, 0, canvas.width, canvas.height)
+      img.src = initial
+    }
+    // Only on mount: later strokes are drawn directly on the canvas
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const point = (e: React.PointerEvent<HTMLCanvasElement>) => {

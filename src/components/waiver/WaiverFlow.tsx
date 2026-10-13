@@ -6,6 +6,7 @@ import { CheckCircle2, FileSignature, Loader2, Mail, ShieldAlert, Smartphone, X 
 import LegalDocument from '@/components/waiver/LegalDocument'
 import SignaturePad from '@/components/waiver/SignaturePad'
 import type { PendingDocument, SignedDocumentInput } from '@/utils/waivers'
+import { nameMatches } from '@/utils/name-match'
 
 export interface PendingParticipant {
   participantId: string
@@ -232,15 +233,28 @@ function ParticipantSigner({
 
   const update = (patch: Partial<DocState>) => setDocState(s => s.map((d, i) => (i === docIndex ? { ...d, ...patch } : d)))
 
-  const nameOk = signerName.trim().length >= 3 && signerName.trim().includes(' ')
-  const ready =
-    state.reachedEnd &&
-    initialsDone === initialKeys.length &&
-    ackList.every(a => state.acks[a.key]) &&
-    nameOk &&
-    (!forMinor || relationship !== '') &&
-    (!isMinorLiability || minorAckName.trim().length >= 2) &&
-    !!signature
+  const nameComplete = signerName.trim().length >= 3 && signerName.trim().includes(' ')
+  // Adults sign for themselves, so the name must match the member (the server checks this too)
+  const nameMismatch = !forMinor && nameComplete && !nameMatches(signerName, p.name, null)
+  const nameOk = nameComplete && !nameMismatch
+  // What's still missing, so a disabled button never leaves someone guessing
+  const uncheckedCount = ackList.filter(a => !state.acks[a.key]).length
+  const todo = [
+    !state.reachedEnd && 'scroll to the end',
+    initialsDone < initialKeys.length && `initial ${initialKeys.length - initialsDone} more section${initialKeys.length - initialsDone === 1 ? '' : 's'}`,
+    uncheckedCount > 0 && `check ${uncheckedCount} more box${uncheckedCount === 1 ? '' : 'es'}`,
+    isMinorLiability && minorAckName.trim().length < 2 && `have ${p.firstName} type their name`,
+    forMinor && relationship === '' && 'choose Parent or Legal Guardian',
+    !nameOk && 'type your full legal name',
+    !signature && 'draw your signature',
+  ].filter(Boolean) as string[]
+  const ready = todo.length === 0
+
+  const back = () => {
+    setError(null)
+    setDocIndex(i => Math.max(0, i - 1))
+    scrollRef.current?.scrollTo({ top: 0 })
+  }
 
   const next = async () => {
     setError(null)
@@ -403,11 +417,18 @@ function ParticipantSigner({
                   value={signerName}
                   onChange={e => setSignerName(e.target.value)}
                   placeholder={forMinor ? 'First and last name' : p.name}
-                  className="w-full rounded-xl border border-white/10 bg-black/60 px-4 py-3 text-base text-white outline-none focus:ring-2 focus:ring-red-500"
+                  aria-invalid={nameMismatch}
+                  aria-describedby={nameMismatch ? 'signer-name-hint' : undefined}
+                  className={`w-full rounded-xl border bg-black/60 px-4 py-3 text-base text-white outline-none focus:ring-2 focus:ring-red-500 ${nameMismatch ? 'border-amber-500/70' : 'border-white/10'}`}
                 />
+                {nameMismatch && (
+                  <p id="signer-name-hint" className="mt-1.5 text-xs font-medium text-amber-300">
+                    This must be {p.name}&apos;s own legal name. Only {p.firstName} can sign their waiver.
+                  </p>
+                )}
               </div>
 
-              <SignaturePad onChange={setSignature} />
+              <SignaturePad onChange={setSignature} initial={signature} />
             </fieldset>
           ) : (
             <div className="rounded-xl border border-white/10 bg-black/40 p-4">
@@ -423,12 +444,25 @@ function ParticipantSigner({
             <p role="alert" className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm font-medium text-red-300">{error}</p>
           )}
 
+          {!ready && state.reachedEnd && (
+            <p id="waiver-todo" className="text-xs text-zinc-400 sm:text-right">
+              To continue: {todo.join(', ')}.
+            </p>
+          )}
+
           <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3 pb-2">
-            {skippable ? (
-              <button type="button" id="waiver-not-now" onClick={onSkip} className="text-sm font-semibold text-zinc-400 hover:text-white">
-                Not now
-              </button>
-            ) : <span />}
+            <div className="flex items-center gap-5">
+              {!isFirst && (
+                <button type="button" id="waiver-back" onClick={back} disabled={submitting} className="text-sm font-semibold text-zinc-300 hover:text-white disabled:opacity-40">
+                  ← Back
+                </button>
+              )}
+              {skippable && (
+                <button type="button" id="waiver-not-now" onClick={onSkip} className="text-sm font-semibold text-zinc-400 hover:text-white">
+                  Not now
+                </button>
+              )}
+            </div>
             <button
               type="button"
               id={isLast ? 'waiver-submit' : 'waiver-next'}
