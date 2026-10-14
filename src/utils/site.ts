@@ -19,8 +19,23 @@ export const SITE = {
     postalCode: '91335',
     country: 'US',
   },
-  // Add Instagram / Facebook / Yelp / Google Maps URLs here once they exist.
-  sameAs: [] as string[],
+  // Google Business Profile. The kgmid (/g/11zy8zlhvc) is the permanent
+  // Knowledge Graph ID of OUR listing — linking it tells Google the website
+  // and the profile are the same entity (and not the similarly named
+  // "Showtime Boxing Fitness" gym in Lake Balboa).
+  google: {
+    kgmid: '/g/11zy8zlhvc',
+    profileUrl: 'https://www.google.com/search?kgmid=/g/11zy8zlhvc',
+    shareUrl: 'https://share.google/GsrNoofOcoTVj4Uu1',
+    directionsUrl:
+      'https://www.google.com/maps/dir/?api=1&destination=La+Familia+Showtime+Boxing+Club%2C+18323+Sherman+Way%2C+Reseda%2C+CA+91335',
+  },
+  // Add Instagram / Facebook / TikTok / Yelp URLs here once they exist.
+  // Only add accounts WE own (@showtimeboxingla is a different gym).
+  sameAs: [
+    'https://www.google.com/search?kgmid=/g/11zy8zlhvc',
+    'https://share.google/GsrNoofOcoTVj4Uu1',
+  ] as string[],
 } as const
 
 // Only these hosts may be indexed by search engines. Everything else

@@ -31,7 +31,10 @@ const gymJsonLd = {
     postalCode: SITE.address.postalCode,
     addressCountry: SITE.address.country,
   },
-  areaServed: ["Reseda", "Northridge", "Van Nuys", "Canoga Park", "Winnetka", "Lake Balboa", "San Fernando Valley"],
+  // Note: "Lake Balboa" intentionally omitted — a different, similarly named
+  // gym is located there and we don't want Google conflating the two.
+  areaServed: ["Reseda", "Northridge", "Van Nuys", "Canoga Park", "Winnetka", "Tarzana", "San Fernando Valley"],
+  hasMap: SITE.google.shareUrl,
   openingHoursSpecification: [
     {
       "@type": "OpeningHoursSpecification",
@@ -295,8 +298,26 @@ export default async function Home() {
                 <div className="flex items-start gap-3">
                   <MapPin className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
                   <div>
-                    <p className="text-zinc-200 font-medium">18323 Sherman Way</p>
-                    <p>Reseda, CA 91335</p>
+                    <a
+                      id="footer-directions-link"
+                      href={SITE.google.directionsUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="group block hover:text-white transition-colors"
+                    >
+                      <p className="text-zinc-200 font-medium group-hover:text-white">18323 Sherman Way</p>
+                      <p>Reseda, CA 91335</p>
+                      <p className="text-xs text-red-500 mt-1 group-hover:underline">Get directions</p>
+                    </a>
+                    <a
+                      id="footer-google-profile-link"
+                      href={SITE.google.profileUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-block text-xs text-zinc-500 hover:text-white mt-1 transition-colors"
+                    >
+                      Find us on Google
+                    </a>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
