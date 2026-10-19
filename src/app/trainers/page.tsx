@@ -19,12 +19,6 @@ const trainers = [
     role: 'Coach',
     image: '/images/coaches/coachMarkos.PNG',
     specialties: ['Boxing Fundamentals', 'Strength & Conditioning']
-  },
-  {
-    name: 'Coach Sergei',
-    role: 'Coach',
-    image: '/images/coaches/coachSergei.PNG',
-    specialties: ['Technical Training', 'Fight Preparation']
   }
 ]
 
@@ -46,7 +40,7 @@ export default function TrainersPage() {
         </div>
 
         {/* Trainers Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
           {trainers.map((trainer, index) => (
             <div 
               key={index} 
