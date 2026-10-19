@@ -15,12 +15,15 @@ export default function LegalDocument({
   onInitial,
   readOnly = false,
   hideTitle = false,
+  guardian = false,
 }: {
   body: string
   initials?: Record<string, string>
   onInitial?: (key: string, value: string) => void
   readOnly?: boolean
   hideTitle?: boolean
+  /** A parent/guardian is signing for a minor: the initial boxes say so. */
+  guardian?: boolean
 }) {
   const blocks = body.replace(/\r\n/g, '\n').split(/\n\s*\n/)
 
@@ -61,7 +64,7 @@ export default function LegalDocument({
               }`}
             >
               <span className={`text-sm font-semibold ${done ? 'text-green-300' : 'text-amber-200'}`}>
-                {done ? '✓ Initialed' : invalid ? 'Use letters for your initials (for example "JD")' : 'Initial here to confirm you read and agree to the section above'}
+                {done ? '✓ Initialed' : invalid ? 'Use letters for your initials (for example "JD")' : guardian ? 'Parent/guardian: initial here to confirm you read and agree to the section above' : 'Initial here to confirm you read and agree to the section above'}
               </span>
               <input
                 id={`initial-${k}`}
@@ -73,7 +76,7 @@ export default function LegalDocument({
                 value={value}
                 onChange={e => onInitial?.(k, e.target.value.toUpperCase())}
                 placeholder="AB"
-                aria-label="Your initials"
+                aria-label={guardian ? 'Parent or guardian initials' : 'Your initials'}
                 className="w-20 rounded-lg border border-white/20 bg-black/60 px-2 py-2 text-center text-base font-bold uppercase tracking-widest text-white outline-none focus:ring-2 focus:ring-red-500"
               />
             </label>

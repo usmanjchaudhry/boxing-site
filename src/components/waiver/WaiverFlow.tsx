@@ -328,6 +328,12 @@ function ParticipantSigner({
           For <span className="text-white font-semibold">{p.name}</span>
           {forMinor && <span className="ml-2 inline-block rounded bg-amber-500/15 px-1.5 py-0.5 text-[11px] font-bold text-amber-300 align-middle">UNDER 18 · PARENT/GUARDIAN SIGNS</span>}
         </p>
+        {forMinor && (
+          <p className="mt-2 text-xs text-zinc-300">
+            <span className="font-semibold text-white">Parent or guardian:</span> you fill in every initial, checkbox and the signature.
+            {isMinorLiability ? ` The only thing ${p.firstName} does is type their name in the box near the bottom that asks for it.` : ''}
+          </p>
+        )}
         {REASON_TEXT[doc.reason] && <p className="mt-2 text-xs text-amber-300">{REASON_TEXT[doc.reason]}</p>}
       </div>
 
@@ -337,6 +343,7 @@ function ParticipantSigner({
           <LegalDocument
             body={doc.body}
             initials={state.initials}
+            guardian={forMinor}
             onInitial={(k, v) => update({ initials: { ...state.initials, [k]: v } })}
           />
           <div ref={endRef} className="h-1" />
