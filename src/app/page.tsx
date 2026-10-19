@@ -10,6 +10,54 @@ export const metadata: Metadata = {
   alternates: { canonical: "/" },
 };
 
+// Home page photo grid. `tile` controls the size in the grid (4 columns on
+// desktop), `position` controls which part of the photo stays in view.
+const GALLERY = [
+  {
+    src: "/images/gallery/ring-coach-watching.jpg",
+    alt: "La Familia coach watching a young boxer spar in the ring",
+    tile: "sm:col-span-2 row-span-2",
+    position: "object-left",
+    sizes: "(max-width: 640px) 100vw, 50vw",
+    priority: true,
+  },
+  {
+    src: "/images/gallery/hand-wraps-coaching.jpg",
+    alt: "Coach wrapping a young boxer's hands on the gym floor",
+    tile: "row-span-2",
+    position: "object-[72%_center]",
+    sizes: "(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw",
+  },
+  {
+    src: "/images/gallery/double-end-bag-drill.jpg",
+    alt: "Two young boxers drilling on the double-end bag",
+    tile: "",
+    position: "object-center",
+    sizes: "(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw",
+  },
+  {
+    src: "/images/gallery/corner-la-familia.jpg",
+    alt: "Member in a La Familia shirt watching sparring from the ring corner",
+    tile: "",
+    position: "object-[55%_center]",
+    sizes: "(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw",
+  },
+  {
+    src: "/images/gallery/fight-prep-wraps.jpg",
+    alt: "Coaches wrapping a boxer's hands before training",
+    tile: "sm:col-span-2 sm:row-span-2",
+    position: "object-[30%_center]",
+    sizes: "(max-width: 640px) 100vw, (max-width: 1024px) 100vw, 50vw",
+  },
+  {
+    src: "/images/gallery/sparring-headgear.jpg",
+    alt: "Boxer in headgear throwing a punch during supervised sparring",
+    tile: "sm:col-span-2 sm:row-span-2",
+    position: "object-center",
+    sizes: "(max-width: 640px) 100vw, (max-width: 1024px) 100vw, 50vw",
+  },
+];
+
 // Structured data so Google understands this is a local gym with a physical
 // address and hours. Validate at https://search.google.com/test/rich-results
 const gymJsonLd = {
@@ -161,113 +209,23 @@ export default async function Home() {
             </p>
           </div>
 
-          {/* Bento Grid Gallery */}
+          {/* Photo grid (real gym photos, no text overlays) */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 auto-rows-[200px] sm:auto-rows-[250px]">
-            {/* Large hero image — spans 2 cols, 2 rows */}
-            <div className="relative rounded-2xl sm:rounded-3xl overflow-hidden group sm:col-span-2 lg:col-span-2 row-span-2 border border-white/5">
-              <Image
-                src="/images/gallery/ring-coach-watching.jpg"
-                alt="La Familia coach watching a young boxer spar in the ring"
-                fill
-                className="object-cover object-left transition-transform duration-700 group-hover:scale-105"
-                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 50vw"
-                priority
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-60 group-hover:opacity-80 transition-opacity duration-500" />
-              <div className="absolute bottom-0 left-0 right-0 p-5 sm:p-8 translate-y-2 group-hover:translate-y-0 transition-transform duration-500">
-                <span className="text-red-400 text-xs font-bold uppercase tracking-wider">Ring Time</span>
-                <h3 className="text-xl sm:text-2xl font-black text-white mt-1">Built in the Ring</h3>
-                <p className="text-zinc-300 text-sm mt-1 opacity-0 group-hover:opacity-100 transition-opacity duration-500">
-                  Full-size ring, real rounds, and coaches watching every exchange.
-                </p>
+            {GALLERY.map((photo) => (
+              <div
+                key={photo.src}
+                className={`relative rounded-2xl sm:rounded-3xl overflow-hidden group border border-white/5 ${photo.tile}`}
+              >
+                <Image
+                  src={photo.src}
+                  alt={photo.alt}
+                  fill
+                  className={`object-cover ${photo.position} transition-transform duration-700 group-hover:scale-105`}
+                  sizes={photo.sizes}
+                  priority={photo.priority}
+                />
               </div>
-            </div>
-
-            {/* Coaching shot (tall) */}
-            <div className="relative rounded-2xl sm:rounded-3xl overflow-hidden group row-span-2 border border-white/5">
-              <Image
-                src="/images/gallery/hand-wraps-coaching.jpg"
-                alt="Coach wrapping a young boxer's hands on the gym floor"
-                fill
-                className="object-cover object-[72%_center] transition-transform duration-700 group-hover:scale-105"
-                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-60 group-hover:opacity-80 transition-opacity duration-500" />
-              <div className="absolute bottom-0 left-0 right-0 p-5 translate-y-2 group-hover:translate-y-0 transition-transform duration-500">
-                <span className="text-red-400 text-xs font-bold uppercase tracking-wider">Coaching</span>
-                <h3 className="text-lg font-black text-white mt-1">Hands-On Coaching</h3>
-              </div>
-            </div>
-
-            {/* Partner drill */}
-            <div className="relative rounded-2xl sm:rounded-3xl overflow-hidden group border border-white/5">
-              <Image
-                src="/images/gallery/double-end-bag-drill.jpg"
-                alt="Two young boxers drilling on the double-end bag"
-                fill
-                className="object-cover transition-transform duration-700 group-hover:scale-105"
-                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent opacity-60 group-hover:opacity-80 transition-opacity duration-500" />
-              <div className="absolute bottom-0 left-0 right-0 p-5 translate-y-2 group-hover:translate-y-0 transition-transform duration-500">
-                <span className="text-red-400 text-xs font-bold uppercase tracking-wider">Drills</span>
-                <h3 className="text-lg font-black text-white mt-1">Partner Work</h3>
-              </div>
-            </div>
-
-            {/* In the corner */}
-            <div className="relative rounded-2xl sm:rounded-3xl overflow-hidden group border border-white/5">
-              <Image
-                src="/images/gallery/corner-la-familia.jpg"
-                alt="Member in a La Familia shirt watching sparring from the ring corner"
-                fill
-                className="object-cover object-[55%_center] transition-transform duration-700 group-hover:scale-105"
-                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent opacity-60 group-hover:opacity-80 transition-opacity duration-500" />
-              <div className="absolute bottom-0 left-0 right-0 p-5 translate-y-2 group-hover:translate-y-0 transition-transform duration-500">
-                <span className="text-red-400 text-xs font-bold uppercase tracking-wider">Community</span>
-                <h3 className="text-lg font-black text-white mt-1">In Your Corner</h3>
-              </div>
-            </div>
-
-            {/* Fight prep — spans 2 cols */}
-            <div className="relative rounded-2xl sm:rounded-3xl overflow-hidden group sm:col-span-2 border border-white/5">
-              <Image
-                src="/images/gallery/fight-prep-wraps.jpg"
-                alt="Coaches wrapping a boxer's hands before training"
-                fill
-                className="object-cover object-top transition-transform duration-700 group-hover:scale-105"
-                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 100vw, 50vw"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-60 group-hover:opacity-80 transition-opacity duration-500" />
-              <div className="absolute bottom-0 left-0 right-0 p-5 sm:p-8 translate-y-2 group-hover:translate-y-0 transition-transform duration-500">
-                <span className="text-red-400 text-xs font-bold uppercase tracking-wider">Fight Prep</span>
-                <h3 className="text-xl sm:text-2xl font-black text-white mt-1">Wrapped &amp; Ready</h3>
-                <p className="text-zinc-300 text-sm mt-1 opacity-0 group-hover:opacity-100 transition-opacity duration-500">
-                  Our coaches teach you to train the right way, from your first hand wrap to your first round.
-                </p>
-              </div>
-            </div>
-
-            {/* Sparring — spans 2 cols */}
-            <div className="relative rounded-2xl sm:rounded-3xl overflow-hidden group sm:col-span-2 border border-white/5">
-              <Image
-                src="/images/gallery/sparring-headgear.jpg"
-                alt="Boxer in headgear throwing a punch during supervised sparring"
-                fill
-                className="object-cover object-top transition-transform duration-700 group-hover:scale-105"
-                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 100vw, 50vw"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-60 group-hover:opacity-80 transition-opacity duration-500" />
-              <div className="absolute bottom-0 left-0 right-0 p-5 sm:p-8 translate-y-2 group-hover:translate-y-0 transition-transform duration-500">
-                <span className="text-red-400 text-xs font-bold uppercase tracking-wider">Live Rounds</span>
-                <h3 className="text-xl sm:text-2xl font-black text-white mt-1">Sparring & Competition Prep</h3>
-                <p className="text-zinc-300 text-sm mt-1 opacity-0 group-hover:opacity-100 transition-opacity duration-500">
-                  Controlled sparring sessions to sharpen your skills under professional supervision.
-                </p>
-              </div>
-            </div>
+            ))}
           </div>
         </div>
       </section>
