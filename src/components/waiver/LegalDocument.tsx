@@ -1,4 +1,5 @@
 import { Fragment, type ReactNode } from 'react'
+import { initialsValid } from '@/utils/name-match'
 
 /**
  * Renders a waiver body (see src/legal/waiver-documents.ts for the format)
@@ -49,7 +50,8 @@ export default function LegalDocument({
               </p>
             )
           }
-          const done = value.trim().length > 0
+          const done = initialsValid(value)
+          const invalid = !done && value.trim().length > 0
           return (
             <label
               key={i}
@@ -59,7 +61,7 @@ export default function LegalDocument({
               }`}
             >
               <span className={`text-sm font-semibold ${done ? 'text-green-300' : 'text-amber-200'}`}>
-                {done ? '✓ Initialed' : 'Initial here to confirm you read and agree to the section above'}
+                {done ? '✓ Initialed' : invalid ? 'Use letters for your initials (for example "JD")' : 'Initial here to confirm you read and agree to the section above'}
               </span>
               <input
                 id={`initial-${k}`}

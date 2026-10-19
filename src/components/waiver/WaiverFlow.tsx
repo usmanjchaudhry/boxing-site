@@ -6,7 +6,7 @@ import { CheckCircle2, FileSignature, Loader2, Mail, ShieldAlert, Smartphone, X 
 import LegalDocument from '@/components/waiver/LegalDocument'
 import SignaturePad from '@/components/waiver/SignaturePad'
 import type { PendingDocument, SignedDocumentInput } from '@/utils/waivers'
-import { nameMatches } from '@/utils/name-match'
+import { nameMatches, initialsValid } from '@/utils/name-match'
 
 export interface PendingParticipant {
   participantId: string
@@ -197,7 +197,8 @@ function ParticipantSigner({
   const isFirst = docIndex === 0
   const isLast = docIndex === p.docs.length - 1
   const initialKeys = useMemo(() => [...doc.body.matchAll(/\[\[initial:([a-z_]+)\]\]/g)].map(m => m[1]), [doc.body])
-  const initialsDone = initialKeys.filter(k => (state.initials[k] ?? '').trim()).length
+  const initialsDone = initialKeys.filter(k => initialsValid(state.initials[k])).length
+  const initialsInvalid = initialKeys.filter(k => (state.initials[k] ?? '').trim() && !initialsValid(state.initials[k])).length
   const isMinorLiability = doc.kind === 'liability' && doc.audience === 'minor'
 
   const ackList = useMemo(() => {
@@ -241,7 +242,8 @@ function ParticipantSigner({
   const uncheckedCount = ackList.filter(a => !state.acks[a.key]).length
   const todo = [
     !state.reachedEnd && 'scroll to the end',
-    initialsDone < initialKeys.length && `initial ${initialKeys.length - initialsDone} more section${initialKeys.length - initialsDone === 1 ? '' : 's'}`,
+    initialsInvalid > 0 && `fix ${initialsInvalid} initial${initialsInvalid === 1 ? '' : 's'} (use letters, e.g. "JD")`,
+    initialsDone + initialsInvalid < initialKeys.length && `initial ${initialKeys.length - initialsDone - initialsInvalid} more section${initialKeys.length - initialsDone - initialsInvalid === 1 ? '' : 's'}`,
     uncheckedCount > 0 && `check ${uncheckedCount} more box${uncheckedCount === 1 ? '' : 'es'}`,
     isMinorLiability && minorAckName.trim().length < 2 && `have ${p.firstName} type their name`,
     forMinor && relationship === '' && 'choose Parent or Legal Guardian',

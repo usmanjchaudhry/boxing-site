@@ -11,7 +11,7 @@ import {
   type WaiverAudience,
 } from '@/legal/waiver-documents'
 import { DEFAULT_TIMEZONE, localDateString, addDays } from '@/utils/timezone'
-import { nameMatches } from '@/utils/name-match'
+import { nameMatches, initialsValid } from '@/utils/name-match'
 
 export { nameMatches }
 
@@ -315,8 +315,9 @@ export async function recordSignatures(db: SupabaseClient, req: SignatureRequest
     }
 
     for (const k of initialKeys(template.doc.body)) {
-      const v = (input.initials?.[k] ?? '').trim()
-      if (!/^[A-Za-z][A-Za-z.\- ]{0,5}$/.test(v)) throw new Error(`Please initial every marked section of the ${template.doc.shortName}.`)
+      const v = input.initials?.[k]
+      if (!(v ?? '').trim()) throw new Error(`Please initial every marked section of the ${template.doc.shortName}.`)
+      if (!initialsValid(v)) throw new Error(`Initials on the ${template.doc.shortName} must be 1 to 6 characters and include a letter (for example "JD").`)
     }
 
     for (const ack of requiredAcknowledgments(template.doc)) {

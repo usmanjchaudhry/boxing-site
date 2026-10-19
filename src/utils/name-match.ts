@@ -14,3 +14,13 @@ export function nameMatches(typed: string, first: string | null, last: string | 
   const parts = [first, last].map(x => normalizeName(x ?? '')).filter(Boolean)
   return parts.length > 0 && parts.every(p => t.includes(` ${p} `) || p.split(' ').every(w => t.includes(` ${w} `)))
 }
+
+/**
+ * Initials rule, shared by the browser and the server so they always agree.
+ * 1–6 characters, at least one letter. Letters in any language (Ñ, É…),
+ * digits, periods, hyphens, apostrophes and spaces are allowed.
+ */
+export function initialsValid(value: string | null | undefined): boolean {
+  const v = (value ?? '').trim()
+  return v.length >= 1 && v.length <= 6 && /^[\p{L}\p{M}\p{N}.'’\- ]+$/u.test(v) && /\p{L}/u.test(v)
+}
