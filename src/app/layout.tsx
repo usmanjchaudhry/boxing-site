@@ -36,13 +36,13 @@ export const metadata: Metadata = {
     title: `${SITE.name} | Boxing Gym in Reseda, CA`,
     description: SITE.description,
     locale: "en_US",
-    images: [{ url: "/gym-interior.jpg", alt: `${SITE.name} gym floor` }],
+    images: [{ url: "/images/og-image.jpg", width: 1200, height: 630, alt: `${SITE.name} coach watching sparring in the ring` }],
   },
   twitter: {
     card: "summary_large_image",
     title: `${SITE.name} | Boxing Gym in Reseda, CA`,
     description: SITE.description,
-    images: ["/gym-interior.jpg"],
+    images: ["/images/og-image.jpg"],
   },
   robots: { index: true, follow: true },
 };

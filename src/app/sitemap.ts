@@ -9,7 +9,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
       lastModified: now,
       changeFrequency: 'weekly',
       priority: 1,
-      images: [`${SITE.url}/gym-interior.jpg`, `${SITE.url}/logo.jpg`],
+      images: [`${SITE.url}/images/gallery/ring-coach-watching.jpg`, `${SITE.url}/logo.jpg`],
     },
     { url: `${SITE.url}/schedule`, lastModified: now, changeFrequency: 'weekly', priority: 0.9 },
     { url: `${SITE.url}/memberships`, lastModified: now, changeFrequency: 'monthly', priority: 0.9 },
