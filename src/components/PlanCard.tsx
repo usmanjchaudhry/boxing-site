@@ -11,8 +11,6 @@ interface Plan {
   billing_interval: string | null
   max_dependents: number
   stripe_price_id: string | null
-  /** Visit days allowed per Mon-Sun week (null/missing = unlimited). */
-  max_weekly_checkins?: number | null
 }
 
 export default function PlanCard({ plan, isCurrentPlan }: { plan: Plan; isCurrentPlan: boolean }) {
@@ -25,11 +23,9 @@ export default function PlanCard({ plan, isCurrentPlan }: { plan: Plan; isCurren
   const isHighlight = isBestValue || isLegacy
   const price = (plan.price_cents / 100).toFixed(2)
 
-  const weeklyVisits = plan.max_weekly_checkins ?? null
-
   // Build features based on plan type
   const features: string[] = [
-    weeklyVisits ? `${weeklyVisits} visit${weeklyVisits === 1 ? '' : 's'} per week (Mon\u2013Sun)` : 'Full gym access',
+    'Full gym access',
     'All equipment included',
   ]
 

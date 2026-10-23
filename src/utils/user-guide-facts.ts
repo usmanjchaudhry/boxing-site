@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { effectiveDailyLimit, weeklyVisitLimit } from '@/utils/plan-rules'
+import { effectiveDailyLimit } from '@/utils/plan-rules'
 import { CODE_UNLOCKED_PLAN_NAMES, LEGACY_ACCESS_CODE, LEGACY_PLAN_NAME, LEGACY_ACCESS_MAX_AGE_SECONDS } from '@/utils/legacy-access'
 
 /**
@@ -13,8 +13,6 @@ export interface GuidePlan {
   /** Different household members the plan lets in per day (null = no limit). */
   peoplePerDay: number | null
   individual: boolean      // covers the account holder only
-  /** Visit days per Mon-Sun week for each person (null = no weekly limit). */
-  weeklyVisits: number | null
 }
 
 export interface GuideFacts {
@@ -33,7 +31,6 @@ type PlanRow = {
   price_cents: number
   max_dependents: number | null
   max_daily_checkins: number | null
-  max_weekly_checkins?: number | null
 }
 
 const toGuidePlan = (p: PlanRow): GuidePlan => ({
@@ -41,18 +38,13 @@ const toGuidePlan = (p: PlanRow): GuidePlan => ({
   price: money(p.price_cents),
   peoplePerDay: effectiveDailyLimit(p),
   individual: p.max_dependents === 0,
-  weeklyVisits: weeklyVisitLimit(p),
 })
 
-/**
- * The hidden plans, oldest row per name, in CODE_UNLOCKED_PLAN_NAMES order.
- * select('*') so the weekly limit is included once its column exists, without
- * breaking before the database update has been run.
- */
+/** The hidden plans, oldest row per name, in CODE_UNLOCKED_PLAN_NAMES order. */
 async function getHiddenPlans(db: SupabaseClient): Promise<GuidePlan[]> {
   const { data } = await db
     .from('membership_plans')
-    .select('*')
+    .select('name, price_cents, max_dependents, max_daily_checkins')
     .in('name', [...CODE_UNLOCKED_PLAN_NAMES])
     .order('created_at', { ascending: true })
   const rows = (data ?? []) as PlanRow[]

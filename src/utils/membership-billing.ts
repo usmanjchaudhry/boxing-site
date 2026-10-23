@@ -41,10 +41,6 @@ export interface MembershipSummary {
   daysLeft: number | null
   /** household_members.role: Primary or Dependent. */
   householdRole: string | null
-  /** Plans with a weekly limit (e.g. Twice a Week): visit days allowed per Mon-Sun week. */
-  weeklyVisitLimit?: number | null
-  /** Visit days used this week, counting today when this scan lets them in. */
-  weeklyVisitsUsed?: number | null
 }
 
 export function paymentTypeOf(paymentMethod: string | null | undefined): PaymentType {
@@ -105,7 +101,7 @@ export function daysLeftLabel(daysLeft: number | null): string | null {
 
 export interface BillingDetail {
   /** Stable id for the fact, for styling/tests: method, amount, paid, end, role */
-  key: 'method' | 'amount' | 'paid' | 'end' | 'visits' | 'role'
+  key: 'method' | 'amount' | 'paid' | 'end' | 'role'
   text: string
   /** Draw attention (e.g. a cash membership about to run out, or already ended). */
   warn?: boolean
@@ -139,14 +135,6 @@ export function billingDetails(m: MembershipSummary): BillingDetail[] {
     }
   } else if (m.paymentType !== 'comp' && m.amountCents != null) {
     parts.push({ key: 'amount', text: `${formatMoney(m.amountCents)}${intervalSuffix(m.interval)}` })
-  }
-
-  if (m.weeklyVisitLimit != null && m.weeklyVisitsUsed != null) {
-    parts.push({
-      key: 'visits',
-      text: `${m.weeklyVisitsUsed} of ${m.weeklyVisitLimit} visits this week`,
-      warn: m.weeklyVisitsUsed >= m.weeklyVisitLimit,
-    })
   }
 
   const role = householdRoleLabel(m.householdRole)

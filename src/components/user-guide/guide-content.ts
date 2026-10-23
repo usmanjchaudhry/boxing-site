@@ -52,16 +52,14 @@ export interface GuideSection {
 
 export const SITE_URL = 'lafamiliashowtimeboxing.com'
 
-/** Who a hidden plan covers, in plain words, e.g. "account holder only, 2 visits a week". */
+/** Who a hidden plan covers, in plain words, e.g. "account holder only, unlimited visits". */
 function whoItCovers(p: GuideFacts['hiddenPlans'][number]): string {
   const people = p.individual
     ? 'account holder only'
     : p.peoplePerDay != null
       ? `account holder + ${p.peoplePerDay - 1} household member${p.peoplePerDay - 1 === 1 ? '' : 's'}`
       : 'account holder + household'
-  return p.weeklyVisits != null
-    ? `${people}, ${p.weeklyVisits} visit${p.weeklyVisits === 1 ? '' : 's'} a week (Mon\u2013Sun)`
-    : `${people}, unlimited visits`
+  return `${people}, unlimited visits`
 }
 
 /** One line per hidden plan for the step detail. */
@@ -433,7 +431,7 @@ export function buildGuide(role: StaffRole, facts: GuideFacts): GuideSection[] {
       title: 'Hidden plans (access code)',
       summary: hiddenPlansSummary(facts),
       icon: KeyRound,
-      keywords: 'legacy old gym transfer classified portal secret code hidden 100 twice a week 80 family of 5 400 kids individual unlimited one person 70 90',
+      keywords: 'legacy old gym transfer classified portal secret code hidden 100 family of 5 400 kids individual unlimited one person 70 80 90',
       blocks: [
         {
           type: 'note',
@@ -531,7 +529,6 @@ export const SCAN_RESULTS: { flag: string; status: 'allowed' | 'denied' | 'error
   { flag: 'Payment Due', status: 'denied', meaning: 'Their last card payment failed.' },
   { flag: 'Membership Expired', status: 'denied', meaning: 'Their cash membership has run out.' },
   { flag: 'Daily Limit Reached', status: 'denied', meaning: 'Their family plan has already let in the most people allowed today.' },
-  { flag: 'Weekly Limit Reached', status: 'denied', meaning: 'Their plan only allows a few visits a week (like Twice a Week) and they\u2019ve used them all. It resets on Monday.' },
   { flag: 'Membership Frozen', status: 'denied', meaning: 'Their membership is paused.' },
   { flag: 'Membership Cancelled', status: 'denied', meaning: 'Their membership was cancelled.' },
   { flag: 'Day Pass Used', status: 'denied', meaning: 'Their day pass was already used today.' },

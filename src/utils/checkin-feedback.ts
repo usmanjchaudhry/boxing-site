@@ -25,8 +25,6 @@ export function classify(
       return { tone: 'warning', staffAction: 'Offer a renewal or record a cash payment in Admin.' }
     case 'Daily Limit Reached':
       return { tone: 'warning', staffAction: 'Their plan has used today\u2019s household check-ins. Offer a day pass.' }
-    case 'Weekly Limit Reached':
-      return { tone: 'warning', staffAction: 'They\u2019ve used this week\u2019s visits (resets Monday). Offer a day pass or an unlimited membership.' }
     case 'Membership Frozen':
       return { tone: 'error', staffAction: 'An admin can unfreeze it in Admin \u2192 Members. Or offer a day pass.' }
     case 'Membership Cancelled':

@@ -4,15 +4,10 @@
  *   - "Individual Unlimited $70": $70/mo, account holder only, unlimited visits
  *   - "Individual Unlimited $80": $80/mo, account holder only, unlimited visits
  *   - "Individual Unlimited $90": $90/mo, account holder only, unlimited visits
- *   - "Twice a Week Membership":  $80/mo, account holder only, 2 visit days per Mon-Sun week
  *   - "Family of 5 Membership":   $400/mo, account holder + 4 household members
  *
  * All are hidden (is_active = false): they don't show on the public Memberships
  * page, only after typing the access code. Staff can still record them as cash.
- *
- * BEFORE running: run database/weekly_checkin_limit.sql in the Supabase SQL
- * editor of the SAME project, or the Twice a Week plan is skipped (its weekly
- * limit can't be saved). The other plans are still added.
  *
  * Safe to re-run: a plan that already exists (by name) is skipped.
  *
@@ -30,7 +25,6 @@ const individualUnlimited = (dollars) => ({
   name: `Individual Unlimited $${dollars}`,
   price_cents: dollars * 100,
   max_dependents: 0,
-  max_weekly_checkins: null, // check in any day
   description: 'Monthly membership for the account holder. Check in any day, unlimited visits. Full access to the gym and all equipment.',
 })
 
@@ -39,17 +33,9 @@ const PLANS = [
   individualUnlimited(80),
   individualUnlimited(90),
   {
-    name: 'Twice a Week Membership',
-    price_cents: 8000, // $80.00
-    max_dependents: 0,
-    max_weekly_checkins: 2,
-    description: 'Monthly membership for the account holder. Train any 2 days each week (Monday to Sunday). Full access to the gym and all equipment.',
-  },
-  {
     name: 'Family of 5 Membership',
     price_cents: 40000, // $400.00
     max_dependents: 4,
-    max_weekly_checkins: null,
     description: 'Monthly gym membership for the account holder plus 4 household members. Full access to the gym and all equipment.',
   },
 ]
@@ -97,18 +83,19 @@ async function addPlan(def) {
   })
   console.log(`✅ ${def.name}: Stripe product ${product.id} | price ${price.id}`)
 
-  const row = {
-    name: def.name,
-    price_cents: def.price_cents,
-    description: def.description,
-    billing_interval: 'month',
-    max_dependents: def.max_dependents,
-    is_active: false, // hidden: only shown after the access code
-    stripe_price_id: price.id,
-  }
-  if (def.max_weekly_checkins != null) row.max_weekly_checkins = def.max_weekly_checkins
-
-  const { data: plan, error } = await supabase.from('membership_plans').insert(row).select('id').single()
+  const { data: plan, error } = await supabase
+    .from('membership_plans')
+    .insert({
+      name: def.name,
+      price_cents: def.price_cents,
+      description: def.description,
+      billing_interval: 'month',
+      max_dependents: def.max_dependents,
+      is_active: false, // hidden: only shown after the access code
+      stripe_price_id: price.id,
+    })
+    .select('id')
+    .single()
   if (error) {
     // Don't leave an orphaned product on sale in Stripe
     await stripe.products.update(product.id, { active: false })
@@ -122,37 +109,17 @@ async function run() {
   console.log('🥊 Adding hidden plans')
   console.log(`   env file: ${envPath} | Stripe: ${mode} | Supabase: ${env.NEXT_PUBLIC_SUPABASE_URL}\n`)
 
-  // Plans with a weekly limit need the column first, otherwise Twice a Week would
-  // be saved as unlimited. Those are skipped (not the whole run) until it exists;
-  // re-run this script after the SQL to add them.
-  const { error: columnErr } = await supabase.from('membership_plans').select('max_weekly_checkins').limit(1)
-  const hasWeeklyColumn = !columnErr
-  const skipped = []
-
-  for (const def of PLANS) {
-    if (def.max_weekly_checkins != null && !hasWeeklyColumn) {
-      skipped.push(def.name)
-      continue
-    }
-    await addPlan(def)
-  }
-
-  if (skipped.length > 0) {
-    console.warn(
-      `\n⚠️  Skipped ${skipped.join(', ')}: the max_weekly_checkins column is missing (${columnErr.message}).\n` +
-      '   Run database/weekly_checkin_limit.sql in the Supabase SQL editor for this project, then re-run this script.'
-    )
-  }
+  for (const def of PLANS) await addPlan(def)
 
   const { data: hidden } = await supabase
     .from('membership_plans')
-    .select(`name, price_cents, max_dependents, is_active, stripe_price_id${hasWeeklyColumn ? ', max_weekly_checkins' : ''}`)
+    .select('name, price_cents, max_dependents, is_active, stripe_price_id')
     .in('name', PLANS.map(p => p.name))
   console.log('\nHidden plans:')
   for (const p of hidden || []) {
     console.log(
       `  🔒 ${p.name}: $${(p.price_cents / 100).toFixed(2)}/mo | household members: ${p.max_dependents}` +
-      ` | visits/week: ${p.max_weekly_checkins ?? 'unlimited'} | public: ${p.is_active} | Stripe: ${p.stripe_price_id}`
+      ` | public: ${p.is_active} | Stripe: ${p.stripe_price_id}`
     )
   }
   console.log('\n🎉 Done!')

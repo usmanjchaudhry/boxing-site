@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { CheckinMethod, CheckinResult } from '@/utils/checkin-code'
-import { DEFAULT_TIMEZONE, daysBetween, localDateString, startOfTodayIn, startOfWeekIn } from '@/utils/timezone'
-import { effectiveDailyLimit, weeklyVisitLimit } from '@/utils/plan-rules'
+import { DEFAULT_TIMEZONE, daysBetween, localDateString, startOfTodayIn } from '@/utils/timezone'
+import { effectiveDailyLimit } from '@/utils/plan-rules'
 import { cashMembershipEnded, formatEndDate } from '@/utils/membership-expiry'
 import { paymentTypeOf, type MembershipSummary } from '@/utils/membership-billing'
 import { getWaiverStatuses, waiverDenialMessage } from '@/utils/waivers'
@@ -31,8 +31,6 @@ type Granted = {
   passIdForLog?: string
   passIdToConsume?: string
   membership?: MembershipSummary
-  /** membership.weeklyVisitsUsed already includes today's visit (undo it if they're turned away later). */
-  countedTodayAsVisit?: boolean
 }
 type Denied = { granted: false; displayFlag: string; loggedFlag: LoggedFlag; message: string; membership?: MembershipSummary }
 type AccessDecision = Granted | Denied
@@ -88,38 +86,20 @@ type PlanRow = {
   billing_interval: string | null
   max_dependents: number | null
   max_daily_checkins: number | null
-  /** Only present once database/weekly_checkin_limit.sql has been run. */
-  max_weekly_checkins?: number | null
 }
 
 const SUBSCRIPTION_COLUMNS = 'id, status, plan_id, end_date, payment_method'
 const PLAN_COLUMNS = 'name, price_cents, billing_interval, max_dependents, max_daily_checkins'
 
-/** True when the error is the database not having the max_weekly_checkins column yet. */
-function isMissingWeeklyColumn(error: { code?: string; message?: string } | null): boolean {
-  if (!error) return false
-  return error.code === '42703' || /max_weekly_checkins/i.test(error.message ?? '')
-}
-
-/**
- * The household's subscription with its plan. Asks for the weekly limit too,
- * but if the database hasn't been updated yet it asks again without it, so
- * check-in keeps working (the weekly limit just isn't enforced).
- */
+/** The household's subscription with its plan. */
 async function loadSubscription(db: SupabaseClient, householdId: string) {
   type Row = SubscriptionRow & { plan_id: string | null; membership_plans: PlanRow | PlanRow[] | null }
-  const query = (planColumns: string) =>
-    db
-      .from('subscriptions')
-      .select(`${SUBSCRIPTION_COLUMNS}, membership_plans(${planColumns})`)
-      .eq('household_id', householdId)
-      .limit(1)
-      .maybeSingle<Row>()
-
-  const first = await query(`${PLAN_COLUMNS}, max_weekly_checkins`)
-  if (!isMissingWeeklyColumn(first.error)) return first
-  console.warn('[checkin] membership_plans.max_weekly_checkins is missing. Run database/weekly_checkin_limit.sql.')
-  return query(PLAN_COLUMNS)
+  return db
+    .from('subscriptions')
+    .select(`${SUBSCRIPTION_COLUMNS}, membership_plans(${PLAN_COLUMNS})`)
+    .eq('household_id', householdId)
+    .limit(1)
+    .maybeSingle<Row>()
 }
 
 type SubscriptionRow = {
@@ -285,44 +265,7 @@ async function evaluateMembership(
     }
   }
 
-  // Weekly limit (e.g. Twice a Week): different visit days per person, Monday to Sunday.
-  // Coming back on a day they already checked in doesn't use another visit.
-  let countedTodayAsVisit = false
-  const weeklyLimit = weeklyVisitLimit(plan)
-  if (weeklyLimit != null) {
-    const { data: thisWeek, error } = await db
-      .from('gym_checkins')
-      .select('scanned_at')
-      .eq('profile_id', profileId)
-      .eq('status_flag', 'Success')
-      .is('pass_id', null)
-      .gte('scanned_at', startOfWeekIn(timeZone).toISOString())
-
-    if (error) {
-      // Don't turn people away because of a lookup problem
-      console.error('[checkin] Could not count this week\'s visits:', error.message)
-    } else {
-      const days = new Set((thisWeek ?? []).map(c => localDateString(new Date(c.scanned_at), timeZone)))
-      const today = localDateString(new Date(), timeZone)
-      const alreadyInToday = days.has(today)
-
-      if (!alreadyInToday && days.size >= weeklyLimit) {
-        if (membership) membership = { ...membership, weeklyVisitLimit: weeklyLimit, weeklyVisitsUsed: days.size }
-        return deny({
-          ...NO_ACCESS,
-          displayFlag: 'Weekly Limit Reached',
-          message: `${plan?.name ?? 'This plan'} allows ${weeklyLimit} visit${weeklyLimit === 1 ? '' : 's'} per week (Monday to Sunday). It resets on Monday.`,
-        })
-      }
-
-      if (membership) {
-        countedTodayAsVisit = !alreadyInToday
-        membership = { ...membership, weeklyVisitLimit: weeklyLimit, weeklyVisitsUsed: days.size + (alreadyInToday ? 0 : 1) }
-      }
-    }
-  }
-
-  return { granted: true, planName: plan?.name ?? '', membership, countedTodayAsVisit }
+  return { granted: true, planName: plan?.name ?? '', membership }
 }
 
 /** How many times to re-decide when another scan claims the same pass first. */
@@ -417,11 +360,6 @@ export async function processCheckin(
 
   if (!waiverStatus?.complete) {
     await log('Waiver Expired', access.passIdForLog)
-    // They're not getting in, so today doesn't use one of this week's visits
-    const membership =
-      access.membership && access.countedTodayAsVisit && access.membership.weeklyVisitsUsed != null
-        ? { ...access.membership, weeklyVisitsUsed: access.membership.weeklyVisitsUsed - 1 }
-        : access.membership
     return {
       httpStatus: 200,
       body: {
@@ -430,7 +368,7 @@ export async function processCheckin(
         message: waiverStatus ? waiverDenialMessage(waiverStatus) : 'No signed waiver on file. Ask the member to sign it in the app.',
         member: profile,
         ...(access.planName ? { plan: { name: access.planName } } : {}),
-        ...(membership ? { membership } : {}),
+        ...(access.membership ? { membership: access.membership } : {}),
       },
     }
   }
