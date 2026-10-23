@@ -62,3 +62,15 @@ export function zonedMidnightUtc(ymd: string, timeZone: string): Date {
 export function startOfTodayIn(timeZone: string): Date {
   return zonedMidnightUtc(localDateString(new Date(), timeZone), timeZone)
 }
+
+/** Monday ('YYYY-MM-DD') of the Monday-to-Sunday week containing `ymd`. */
+export function mondayOf(ymd: string): string {
+  const [y, m, d] = ymd.split('-').map(Number)
+  const weekday = new Date(Date.UTC(y, m - 1, d)).getUTCDay() // 0 = Sunday
+  return addDays(ymd, -((weekday + 6) % 7))
+}
+
+/** UTC instant of local midnight on this week's Monday in `timeZone`. */
+export function startOfWeekIn(timeZone: string, now: Date = new Date()): Date {
+  return zonedMidnightUtc(mondayOf(localDateString(now, timeZone)), timeZone)
+}

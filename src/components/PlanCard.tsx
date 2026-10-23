@@ -8,9 +8,11 @@ interface Plan {
   name: string
   description: string
   price_cents: number
-  billing_interval: string
+  billing_interval: string | null
   max_dependents: number
   stripe_price_id: string | null
+  /** Visit days allowed per Mon-Sun week (null/missing = unlimited). */
+  max_weekly_checkins?: number | null
 }
 
 export default function PlanCard({ plan, isCurrentPlan }: { plan: Plan; isCurrentPlan: boolean }) {
@@ -23,9 +25,11 @@ export default function PlanCard({ plan, isCurrentPlan }: { plan: Plan; isCurren
   const isHighlight = isBestValue || isLegacy
   const price = (plan.price_cents / 100).toFixed(2)
 
+  const weeklyVisits = plan.max_weekly_checkins ?? null
+
   // Build features based on plan type
   const features: string[] = [
-    'Full gym access',
+    weeklyVisits ? `${weeklyVisits} visit${weeklyVisits === 1 ? '' : 's'} per week (Mon\u2013Sun)` : 'Full gym access',
     'All equipment included',
   ]
 
@@ -96,7 +100,7 @@ export default function PlanCard({ plan, isCurrentPlan }: { plan: Plan; isCurren
         {/* Price */}
         <div className="flex items-end gap-1 mb-4">
           <span className="text-4xl font-black text-white">${price}</span>
-          <span className="text-zinc-500 text-sm mb-1">/{plan.billing_interval}</span>
+          <span className="text-zinc-500 text-sm mb-1">/{plan.billing_interval || 'month'}</span>
         </div>
 
         {/* Description */}

@@ -127,7 +127,9 @@ export async function POST(request: NextRequest) {
           assertOk(lookupError, 'Failed to read subscription')
           const alreadyActive = existing?.status === 'Active' && existing?.stripe_subscription_id === stripeSubscriptionId
 
-          // Upsert subscription in our database
+          // Upsert subscription in our database. payment_method must be set here:
+          // a household that used to pay cash keeps 'cash' otherwise, and then the
+          // cash end-date rule (membership-expiry.ts) would cancel a paid card plan.
           const { error } = await supabase.from('subscriptions').upsert({
             household_id: householdId,
             plan_id: planId,
@@ -135,6 +137,7 @@ export async function POST(request: NextRequest) {
             start_date: startDate,
             end_date: endDate,
             stripe_subscription_id: stripeSubscriptionId,
+            payment_method: 'stripe',
           }, {
             onConflict: 'household_id'
           })

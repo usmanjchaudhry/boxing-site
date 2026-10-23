@@ -30,7 +30,7 @@ const QUICK_TOPICS: { id: string; label: string; icon: typeof ScanLine }[] = [
   { id: 'sign-up', label: 'Sign up a customer', icon: UserPlus },
   { id: 'family', label: 'Family members', icon: Users },
   { id: 'freeze', label: 'Freeze a membership', icon: Snowflake },
-  { id: 'legacy', label: 'Legacy plan (old gym)', icon: KeyRound },
+  { id: 'legacy', label: 'Hidden plans (access code)', icon: KeyRound },
 ]
 
 export default function UserGuideTab({ role, facts, onNavigate }: Props) {

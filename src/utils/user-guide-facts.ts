@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { effectiveDailyLimit } from '@/utils/plan-rules'
-import { LEGACY_ACCESS_CODE, LEGACY_PLAN_NAME, LEGACY_ACCESS_MAX_AGE_SECONDS } from '@/utils/legacy-access'
+import { effectiveDailyLimit, weeklyVisitLimit } from '@/utils/plan-rules'
+import { CODE_UNLOCKED_PLAN_NAMES, LEGACY_ACCESS_CODE, LEGACY_PLAN_NAME, LEGACY_ACCESS_MAX_AGE_SECONDS } from '@/utils/legacy-access'
 
 /**
  * Live facts the staff User's Guide shows (prices, who a plan covers, the
@@ -13,12 +13,16 @@ export interface GuidePlan {
   /** Different household members the plan lets in per day (null = no limit). */
   peoplePerDay: number | null
   individual: boolean      // covers the account holder only
+  /** Visit days per Mon-Sun week for each person (null = no weekly limit). */
+  weeklyVisits: number | null
 }
 
 export interface GuideFacts {
   plans: GuidePlan[]
   dayPass: { name: string; price: string } | null
   legacy: { name: string; price: string; code: string; unlockMinutes: number } | null
+  /** Every hidden plan the access code unlocks, in the order the hidden page shows them. */
+  hiddenPlans: GuidePlan[]
 }
 
 const money = (cents: number) =>
@@ -29,6 +33,7 @@ type PlanRow = {
   price_cents: number
   max_dependents: number | null
   max_daily_checkins: number | null
+  max_weekly_checkins?: number | null
 }
 
 const toGuidePlan = (p: PlanRow): GuidePlan => ({
@@ -36,10 +41,29 @@ const toGuidePlan = (p: PlanRow): GuidePlan => ({
   price: money(p.price_cents),
   peoplePerDay: effectiveDailyLimit(p),
   individual: p.max_dependents === 0,
+  weeklyVisits: weeklyVisitLimit(p),
 })
 
+/**
+ * The hidden plans, oldest row per name, in CODE_UNLOCKED_PLAN_NAMES order.
+ * select('*') so the weekly limit is included once its column exists, without
+ * breaking before the database update has been run.
+ */
+async function getHiddenPlans(db: SupabaseClient): Promise<GuidePlan[]> {
+  const { data } = await db
+    .from('membership_plans')
+    .select('*')
+    .in('name', [...CODE_UNLOCKED_PLAN_NAMES])
+    .order('created_at', { ascending: true })
+  const rows = (data ?? []) as PlanRow[]
+  return CODE_UNLOCKED_PLAN_NAMES
+    .map(name => rows.find(p => p.name === name))
+    .filter((p): p is PlanRow => Boolean(p))
+    .map(toGuidePlan)
+}
+
 export async function getGuideFacts(db: SupabaseClient): Promise<GuideFacts> {
-  const [{ data: plans }, { data: legacy }, { data: passes }] = await Promise.all([
+  const [{ data: plans }, { data: legacy }, { data: passes }, hiddenPlans] = await Promise.all([
     // Plans customers can buy on the Memberships page
     db.from('membership_plans')
       .select('name, price_cents, max_dependents, max_daily_checkins')
@@ -59,6 +83,7 @@ export async function getGuideFacts(db: SupabaseClient): Promise<GuideFacts> {
       .eq('category', 'DayPass')
       .order('price_cents', { ascending: true })
       .limit(1),
+    getHiddenPlans(db),
   ])
 
   const pass = passes?.[0]
@@ -73,5 +98,6 @@ export async function getGuideFacts(db: SupabaseClient): Promise<GuideFacts> {
           unlockMinutes: Math.round(LEGACY_ACCESS_MAX_AGE_SECONDS / 60),
         }
       : null,
+    hiddenPlans,
   }
 }

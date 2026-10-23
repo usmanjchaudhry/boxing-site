@@ -52,6 +52,31 @@ export interface GuideSection {
 
 export const SITE_URL = 'lafamiliashowtimeboxing.com'
 
+/** Who a hidden plan covers, in plain words, e.g. "account holder only, 2 visits a week". */
+function whoItCovers(p: GuideFacts['hiddenPlans'][number]): string {
+  const people = p.individual
+    ? 'account holder only'
+    : p.peoplePerDay != null
+      ? `account holder + ${p.peoplePerDay - 1} household member${p.peoplePerDay - 1 === 1 ? '' : 's'}`
+      : 'account holder + household'
+  return p.weeklyVisits != null
+    ? `${people}, ${p.weeklyVisits} visit${p.weeklyVisits === 1 ? '' : 's'} a week (Mon\u2013Sun)`
+    : `${people}, unlimited visits`
+}
+
+/** One line per hidden plan for the step detail. */
+function hiddenPlanList(facts: GuideFacts): string {
+  if (facts.hiddenPlans.length === 0) return 'No hidden plans are set up right now. Ask the owner.'
+  return facts.hiddenPlans.map(p => `**${p.name}**: ${p.price}/month, ${whoItCovers(p)}.`).join('\n')
+}
+
+function hiddenPlansSummary(facts: GuideFacts): string {
+  const names = facts.hiddenPlans.map(p => `${p.name} (${p.price})`)
+  return names.length > 0
+    ? `Unlock with the access code: ${names.join(', ')}.`
+    : 'Unlock the hidden plans with the access code.'
+}
+
 export function buildGuide(role: StaffRole, facts: GuideFacts): GuideSection[] {
   const isAdmin = role === 'admin'
   const individual = facts.plans.find(p => p.individual)
@@ -402,23 +427,23 @@ export function buildGuide(role: StaffRole, facts: GuideFacts): GuideSection[] {
       ],
     },
 
-    /* ───────────── Legacy ───────────── */
+    /* ───────────── Hidden plans (access code) ───────────── */
     {
       id: 'legacy',
-      title: `Legacy ${facts.legacy?.price ?? '$100'} plan (members from the old gym)`,
-      summary: 'Unlock the hidden Legacy plan with the access code.',
+      title: 'Hidden plans (access code)',
+      summary: hiddenPlansSummary(facts),
       icon: KeyRound,
-      keywords: 'legacy old gym transfer classified portal secret code hidden 100',
+      keywords: 'legacy old gym transfer classified portal secret code hidden 100 twice a week 80 family of 5 400 kids individual unlimited one person 70 90',
       blocks: [
         {
           type: 'note',
           tone: 'warning',
-          text: 'Only for members who trained at the **old gym**. The plan is hidden from everyone else. Please don\u2019t share the code.',
+          text: 'These plans are hidden from the public. Only offer them to customers the owner approves (like members from the **old gym**). Please don\u2019t share the code.',
         },
         { type: 'legacyCode' },
         {
           type: 'steps',
-          title: 'Unlock and buy the Legacy plan',
+          title: 'Unlock and buy a hidden plan',
           steps: [
             { text: 'On the customer\u2019s phone, sign in to their account (or create one first). Make sure the waiver is signed.' },
             { text: 'Tap **Dashboard**, then the red **View Memberships** button.', link: { label: 'See the Memberships page', href: '/memberships' } },
@@ -427,14 +452,14 @@ export function buildGuide(role: StaffRole, facts: GuideFacts): GuideSection[] {
               detail: 'It is small and easy to miss. It\u2019s under the line that starts \u201cAll plans are billed monthly\u201d.',
             },
             { text: 'Type the access code (above) and tap **Unlock Plan**.' },
-            { text: `The **${facts.legacy?.name ?? 'Legacy Unlimited'}** plan appears (${facts.legacy?.price ?? '$100'}/month). Tap **Subscribe**.` },
+            { text: 'The hidden plans appear. Tap **Subscribe** on the one they want.', detail: hiddenPlanList(facts) },
             { text: 'Enter their card on the payment page and tap **Subscribe**. Then tap **Go to Dashboard**. Their QR code is ready.' },
           ],
         },
         {
           type: 'note',
           tone: 'tip',
-          text: `The unlock lasts ${facts.legacy?.unlockMinutes ?? 60} minutes. If the page jumps back to the normal plans, just enter the code again. The Legacy plan covers the account holder only.`,
+          text: `The unlock lasts ${facts.legacy?.unlockMinutes ?? 60} minutes. If the page jumps back to the normal plans, just enter the code again.`,
         },
       ],
     },
@@ -506,6 +531,7 @@ export const SCAN_RESULTS: { flag: string; status: 'allowed' | 'denied' | 'error
   { flag: 'Payment Due', status: 'denied', meaning: 'Their last card payment failed.' },
   { flag: 'Membership Expired', status: 'denied', meaning: 'Their cash membership has run out.' },
   { flag: 'Daily Limit Reached', status: 'denied', meaning: 'Their family plan has already let in the most people allowed today.' },
+  { flag: 'Weekly Limit Reached', status: 'denied', meaning: 'Their plan only allows a few visits a week (like Twice a Week) and they\u2019ve used them all. It resets on Monday.' },
   { flag: 'Membership Frozen', status: 'denied', meaning: 'Their membership is paused.' },
   { flag: 'Membership Cancelled', status: 'denied', meaning: 'Their membership was cancelled.' },
   { flag: 'Day Pass Used', status: 'denied', meaning: 'Their day pass was already used today.' },

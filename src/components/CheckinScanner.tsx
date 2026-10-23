@@ -9,6 +9,7 @@ import { useBarcodeScanner } from '@/hooks/useBarcodeScanner'
 import { extractProfileId, type CheckinMethod, type CheckinResult } from '@/utils/checkin-code'
 import { feedbackSounds, unlockAudio, isAudioUnlocked } from '@/utils/feedback-sounds'
 import { classify, type CheckinTone } from '@/utils/checkin-feedback'
+import { billingDetails, type MembershipSummary } from '@/utils/membership-billing'
 
 /* ────────────────────────────────────────────────────────────
  * Config
@@ -327,6 +328,8 @@ function ResultPanel({ entry, onNext }: { entry: ScanEntry; onNext: () => void }
         )}
       </div>
 
+      {result.membership && <MembershipDetails membership={result.membership} />}
+
       <p className="mt-4 max-w-lg text-base sm:text-lg text-zinc-200">{result.message}</p>
       {staffAction && <p className="mt-2 max-w-lg text-sm text-zinc-400">{staffAction}</p>}
 
@@ -351,6 +354,27 @@ function ResultPanel({ entry, onNext }: { entry: ScanEntry; onNext: () => void }
         @keyframes checkinPop { from { transform: scale(.97); opacity: 0 } to { transform: scale(1); opacity: 1 } }
       `}</style>
     </div>
+  )
+}
+
+/** "Card (Stripe) · $225/mo · Account holder" or "Cash · Paid $200 on Oct 1 · Good through Oct 30 (10 days left)" */
+function MembershipDetails({ membership }: { membership: MembershipSummary }) {
+  const details = billingDetails(membership)
+  return (
+    <ul
+      id="checkin-membership-details"
+      aria-label="Membership billing"
+      className="mt-3 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-sm sm:text-base"
+    >
+      {details.map((d, i) => (
+        <li key={d.key} data-detail={d.key} className="inline-flex items-center gap-2">
+          {i > 0 && <span aria-hidden="true" className="text-zinc-600">&middot;</span>}
+          <span className={d.warn ? 'font-bold text-amber-300' : d.key === 'method' ? 'font-semibold text-zinc-100' : 'text-zinc-300'}>
+            {d.text}
+          </span>
+        </li>
+      ))}
+    </ul>
   )
 }
 

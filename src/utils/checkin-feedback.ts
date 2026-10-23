@@ -1,4 +1,5 @@
 import type { CheckinResult } from '@/utils/checkin-code'
+import { endsSoon } from '@/utils/membership-billing'
 
 /**
  * How the front desk should read a check-in result: its color and the next
@@ -7,8 +8,14 @@ import type { CheckinResult } from '@/utils/checkin-code'
  */
 export type CheckinTone = 'success' | 'warning' | 'error'
 
-export function classify(result: Pick<CheckinResult, 'status' | 'flag'>): { tone: CheckinTone; staffAction?: string } {
-  if (result.status === 'allowed') return { tone: 'success' }
+export function classify(
+  result: Pick<CheckinResult, 'status' | 'flag'> & Partial<Pick<CheckinResult, 'membership'>>
+): { tone: CheckinTone; staffAction?: string } {
+  if (result.status === 'allowed') {
+    return result.membership && endsSoon(result.membership)
+      ? { tone: 'success', staffAction: 'Their cash membership is almost up. Remind them to renew.' }
+      : { tone: 'success' }
+  }
   switch (result.flag) {
     case 'Waiver Required':
       return { tone: 'warning', staffAction: 'Have them open the app and sign the waiver, then scan again.' }
@@ -18,6 +25,8 @@ export function classify(result: Pick<CheckinResult, 'status' | 'flag'>): { tone
       return { tone: 'warning', staffAction: 'Offer a renewal or record a cash payment in Admin.' }
     case 'Daily Limit Reached':
       return { tone: 'warning', staffAction: 'Their plan has used today\u2019s household check-ins. Offer a day pass.' }
+    case 'Weekly Limit Reached':
+      return { tone: 'warning', staffAction: 'They\u2019ve used this week\u2019s visits (resets Monday). Offer a day pass or an unlimited membership.' }
     case 'Membership Frozen':
       return { tone: 'error', staffAction: 'An admin can unfreeze it in Admin \u2192 Members. Or offer a day pass.' }
     case 'Membership Cancelled':
