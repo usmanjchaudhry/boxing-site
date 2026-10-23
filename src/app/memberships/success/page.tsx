@@ -5,19 +5,13 @@ import Link from 'next/link'
 import Navbar from '@/components/Navbar'
 import { stripe } from '@/utils/stripe/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
+import { currentPeriod, localStatusFromStripe } from '@/utils/stripe-status'
 
 function getAdminDb() {
   return createAdminClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   )
-}
-
-function toDateString(val: any): string | null {
-  if (!val) return null
-  const ts = typeof val === 'number' ? val : (val?.seconds ?? val?.unix ?? null)
-  if (!ts) return null
-  try { return new Date(ts * 1000).toISOString().split('T')[0] } catch { return null }
 }
 
 export default async function MembershipSuccessPage({
@@ -41,23 +35,30 @@ export default async function MembershipSuccessPage({
 
       if (householdId && stripeSubscriptionId && planId) {
         const adminDb = getAdminDb()
-        const sub = await stripe.subscriptions.retrieve(stripeSubscriptionId) as any
-        const startDate = toDateString(sub.current_period_start) || new Date().toISOString().split('T')[0]
-        const endDate = toDateString(sub.current_period_end)
+        const sub = await stripe.subscriptions.retrieve(stripeSubscriptionId)
+        const { start, end } = currentPeriod(sub)
 
-        const { error } = await adminDb.from('subscriptions').upsert({
-          household_id: householdId,
-          plan_id: planId,
-          status: 'Active',
-          start_date: startDate,
-          end_date: endDate,
-          stripe_subscription_id: stripeSubscriptionId,
-          payment_method: 'stripe',
-        }, {
-          onConflict: 'household_id'
-        })
+        // Only ever turn access ON here, and only when Stripe says it's paid. This
+        // link can be reopened later (bookmark/history): it must not re-activate a
+        // membership whose card has since failed or that was cancelled. The webhook
+        // and the nightly sync handle every other status.
+        if (localStatusFromStripe(sub) === 'Active') {
+          const { error } = await adminDb.from('subscriptions').upsert({
+            household_id: householdId,
+            plan_id: planId,
+            status: 'Active',
+            start_date: start || new Date().toISOString().split('T')[0],
+            end_date: end,
+            stripe_subscription_id: stripeSubscriptionId,
+            payment_method: 'stripe',
+          }, {
+            onConflict: 'household_id'
+          })
 
-        if (error) console.error('[success-page] Upsert error:', error)
+          if (error) console.error('[success-page] Upsert error:', error)
+        } else {
+          console.warn('[success-page] Subscription', stripeSubscriptionId, 'is', sub.status, '- not activating')
+        }
       } 
       // Handle one-time purchases (like Day Passes)
       else if (session.metadata?.product_id && session.metadata?.profile_id) {

@@ -1,5 +1,6 @@
 import { stripe } from '@/utils/stripe/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
+import { currentPeriod, localStatusFromStripe } from '@/utils/stripe-status'
 
 /** Safely convert a Stripe timestamp to a date string */
 function toDateString(val: any): string {
@@ -55,10 +56,7 @@ export async function syncSubscriptionWithStripe(
 
     console.log(`[stripe-sync] sub=${sub.stripe_subscription_id} stripe_status=${stripeSub.status} db_status=${sub.status}`)
 
-    let correctStatus = 'Active'
-    if (stripeSub.status === 'canceled') correctStatus = 'Cancelled'
-    else if (stripeSub.status === 'past_due') correctStatus = 'Past_Due'
-    else if (stripeSub.pause_collection) correctStatus = 'Frozen'
+    const correctStatus = localStatusFromStripe(stripeSub)
 
     // If the stored subscription is cancelled in Stripe, check for a newer active one
     if (correctStatus === 'Cancelled') {
@@ -89,7 +87,7 @@ export async function syncSubscriptionWithStripe(
               status: 'Active',
               stripe_subscription_id: newSub.id,
               plan_id: newPlanId,
-              start_date: toDateString(newSub.current_period_start),
+              start_date: currentPeriod(newSub).start ?? toDateString(null),
             })
             .eq('household_id', householdId)
 

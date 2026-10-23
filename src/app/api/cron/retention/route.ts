@@ -205,6 +205,8 @@ export async function GET(request: NextRequest) {
       .from('subscriptions')
       .select('household_id, end_date')
       .eq('status', 'Active')
+      // Cash only: card memberships store their renewal date in end_date and renew on their own
+      .eq('payment_method', 'cash')
       .not('end_date', 'is', null)
       .gte('end_date', today)
       .lte('end_date', threeDaysStr)
