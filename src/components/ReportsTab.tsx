@@ -13,7 +13,7 @@ interface ReportsData {
   checkinTrend: { date: string; checkins: number }[]
   subscriptionStatus: { status: string; count: number }[]
   planDistribution: { plan: string; count: number }[]
-  revenue: { month: string; revenue: number; card: number; cash: number }[]
+  revenue: { month: string; revenue: number; card: number; cash: number; cashOut?: number }[]
   summary: {
     thisMonth: MonthTotals
     lastMonth: MonthTotals
@@ -26,11 +26,23 @@ interface ReportsData {
   }
 }
 
-interface MonthTotals { label: string; total: number; card: number; cash: number }
+interface MonthTotals {
+  label: string
+  total: number
+  card: number
+  cash: number
+  /** Cash paid out (coach payouts, other expenses). */
+  cashOut?: number
+  /** Cash in minus cash out. */
+  netCash?: number
+  /** Card + cash in minus cash out. */
+  net?: number
+}
 
 const STRIPE_COLOR = '#818cf8'
 const CASH_COLOR = '#f59e0b'
-const MONEY_KEYS = new Set(['revenue', 'card', 'cash'])
+const CASH_OUT_COLOR = '#ef4444'
+const MONEY_KEYS = new Set(['revenue', 'card', 'cash', 'cashOut'])
 
 const money = (n: number) =>
   `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -151,15 +163,11 @@ export default function ReportsTab() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <IncomeSplit
             title={`This month (${summary.thisMonth.label})`}
-            total={summary.thisMonth.total}
-            card={summary.thisMonth.card}
-            cash={summary.thisMonth.cash}
+            totals={summary.thisMonth}
           />
           <IncomeSplit
             title={`Last month (${summary.lastMonth.label})`}
-            total={summary.lastMonth.total}
-            card={summary.lastMonth.card}
-            cash={summary.lastMonth.cash}
+            totals={summary.lastMonth}
           />
         </div>
       </div>
@@ -169,7 +177,7 @@ export default function ReportsTab() {
         <div className="flex items-center gap-2 mb-6">
           <DollarSign className="w-5 h-5 text-green-400" />
           <h3 className="text-lg font-bold">Monthly Revenue</h3>
-          <span className="text-xs text-zinc-500 ml-auto">Stripe + cash, after refunds · last 6 months</span>
+          <span className="text-xs text-zinc-500 ml-auto">Stripe + cash, after refunds · cash out in red · last 6 months</span>
         </div>
         <ResponsiveContainer width="100%" height={280}>
           <BarChart data={data.revenue}>
@@ -179,7 +187,8 @@ export default function ReportsTab() {
             <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.03)' }} />
             <Legend />
             <Bar dataKey="card" stackId="income" fill={STRIPE_COLOR} name="Stripe (card)" />
-            <Bar dataKey="cash" stackId="income" fill={CASH_COLOR} name="Cash" radius={[6, 6, 0, 0]} />
+            <Bar dataKey="cash" stackId="income" fill={CASH_COLOR} name="Cash in" radius={[6, 6, 0, 0]} />
+            <Bar dataKey="cashOut" fill={CASH_OUT_COLOR} name="Cash out" radius={[6, 6, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -322,7 +331,11 @@ export default function ReportsTab() {
   )
 }
 
-function IncomeSplit({ title, total, card, cash }: { title: string; total: number; card: number; cash: number }) {
+function IncomeSplit({ title, totals }: { title: string; totals: MonthTotals }) {
+  const { total, card, cash } = totals
+  const cashOut = totals.cashOut ?? 0
+  const netCash = totals.netCash ?? round2(cash - cashOut)
+  const net = totals.net ?? round2(total - cashOut)
   const cardPct = total > 0 ? Math.round((card / total) * 100) : 0
   const cashPct = total > 0 ? 100 - cardPct : 0
 
@@ -359,9 +372,31 @@ function IncomeSplit({ title, total, card, cash }: { title: string; total: numbe
           </div>
         </div>
       </div>
+
+      {/* Cash in, cash out (coach payouts / expenses), net */}
+      <div className="mt-4 pt-4 border-t border-white/5 space-y-1.5 text-sm">
+        <div className="flex justify-between">
+          <span className="text-zinc-500">Cash in</span>
+          <span className="font-semibold text-white">{money(cash)}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-zinc-500">Cash out (coaches &amp; expenses)</span>
+          <span className="font-semibold text-red-400">{cashOut > 0 ? `-${money(cashOut)}` : money(0)}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-zinc-400 font-semibold">Net cash</span>
+          <span className={`font-bold ${netCash < 0 ? 'text-red-400' : 'text-white'}`}>{netCash < 0 ? `-${money(-netCash)}` : money(netCash)}</span>
+        </div>
+        <div className="flex justify-between pt-1.5 border-t border-white/5">
+          <span className="text-zinc-400 font-semibold">Total after cash out</span>
+          <span className={`font-black ${net < 0 ? 'text-red-400' : 'text-green-400'}`}>{net < 0 ? `-${money(-net)}` : money(net)}</span>
+        </div>
+      </div>
     </div>
   )
 }
+
+const round2 = (n: number) => Math.round(n * 100) / 100
 
 function SummaryCard({ icon, label, value, color, bgColor }: {
   icon: React.ReactNode

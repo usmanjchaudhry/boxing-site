@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { ShieldCheck, RefreshCw, Banknote, Loader2, Search, BookOpen, Trash2 } from 'lucide-react'
+import { ShieldCheck, RefreshCw, Banknote, Loader2, Search, BookOpen, Trash2, HandCoins } from 'lucide-react'
 import CheckinScanner from '@/components/CheckinScanner'
 import ReportsTab from '@/components/ReportsTab'
 import CheckinsLogTab from '@/components/CheckinsLogTab'
@@ -79,6 +79,28 @@ interface CashPaymentRecord {
   otherPaymentsOnSub: number
 }
 
+/** Row returned by GET /api/admin/cash-payout (cash paid OUT, e.g. to a coach) */
+interface CashPayoutRecord {
+  id: string
+  payeeName: string
+  category: 'coach' | 'other'
+  amount_cents: number
+  payout_date: string
+  notes: string | null
+  created_at: string
+  recordedBy: string
+}
+
+/** One line in the Cash Payment History: money in (payment) or money out (payout). */
+type CashLedgerRow =
+  | { kind: 'in'; created_at: string; record: CashPaymentRecord }
+  | { kind: 'out'; created_at: string; record: CashPayoutRecord }
+
+const PAYOUT_CATEGORY_LABEL: Record<CashPayoutRecord['category'], string> = {
+  coach: 'Coach payout',
+  other: 'Other expense',
+}
+
 export default function AdminDashboardClient({ role, guideFacts }: { role: string; guideFacts: GuideFacts }) {
   const [activeTab, setActiveTab] = useState<Tab>('overview')
   const [stats, setStats] = useState<Stats | null>(null)
@@ -101,6 +123,14 @@ export default function AdminDashboardClient({ role, guideFacts }: { role: strin
   // Removing a cash payment (e.g. recorded twice by mistake)
   const [deletingCash, setDeletingCash] = useState<CashPaymentRecord | null>(null)
   const [cashDeleting, setCashDeleting] = useState(false)
+  // Cash paid out (coach payouts / other expenses), shown as minus in the history
+  const [payouts, setPayouts] = useState<CashPayoutRecord[]>([])
+  const [payoutsError, setPayoutsError] = useState<string | null>(null)
+  const [payoutForm, setPayoutForm] = useState({ payeeName: '', category: 'coach' as CashPayoutRecord['category'], amount: '', payoutDate: new Date().toISOString().split('T')[0], notes: '' })
+  const [payoutSubmitting, setPayoutSubmitting] = useState(false)
+  const [payoutMessage, setPayoutMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null)
+  const [deletingPayout, setDeletingPayout] = useState<CashPayoutRecord | null>(null)
+  const [payoutDeleting, setPayoutDeleting] = useState(false)
   
   // Per-tab loading flags (true until first fetch completes)
   const [paymentsLoading, setPaymentsLoading] = useState(true)
@@ -174,6 +204,17 @@ export default function AdminDashboardClient({ role, guideFacts }: { role: strin
     }
   }, [])
 
+  const fetchPayouts = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/cash-payout')
+      const data = await res.json()
+      if (data.payouts) setPayouts(data.payouts)
+      setPayoutsError(data.error || null)
+    } catch (err) {
+      console.error('Failed to fetch cash payouts:', err)
+    }
+  }, [])
+
   const refreshAll = useCallback(async () => {
     setLoading(true)
     await Promise.all([
@@ -200,8 +241,9 @@ export default function AdminDashboardClient({ role, guideFacts }: { role: strin
       fetch('/api/admin/members').then(r => r.json()).then(d => { if (d.members) setMembers(d.members) }).finally(() => setMembersLoading(false))
       fetch('/api/stripe/plans').then(r => r.json()).then(d => { if (d.plans) setPlans(d.plans) }).catch(() => {}).finally(() => setCashLoading(false))
       fetch('/api/admin/cash-payment').then(r => r.json()).then(d => { if (d.payments) setCashHistory(d.payments) }).catch(() => {})
+      fetchPayouts()
     }
-  }, [activeTab, payments.length, members.length, plans.length, fetchPayments, fetchMembers])
+  }, [activeTab, payments.length, members.length, plans.length, fetchPayments, fetchMembers, fetchPayouts])
 
   const visibleTabs = tabsForRole(role)
 
@@ -231,6 +273,29 @@ export default function AdminDashboardClient({ role, guideFacts }: { role: strin
   const cashDupKey = (cp: CashPaymentRecord) => `${cp.householdId}|${cp.payment_date}|${cp.amount_cents}`
   const cashDupCounts: Record<string, number> = {}
   for (const cp of cashHistory) cashDupCounts[cashDupKey(cp)] = (cashDupCounts[cashDupKey(cp)] || 0) + 1
+
+  const confirmDeletePayout = async () => {
+    if (!deletingPayout) return
+    setPayoutDeleting(true)
+    try {
+      const res = await fetch(`/api/admin/cash-payout?id=${encodeURIComponent(deletingPayout.id)}`, { method: 'DELETE' })
+      const data = await res.json()
+      setPayoutMessage(res.ok ? { type: 'success', text: data.message } : { type: 'error', text: data.error || 'Failed to remove payout' })
+      if (res.ok) await fetchPayouts()
+    } catch (err) {
+      setPayoutMessage({ type: 'error', text: err instanceof Error ? err.message : 'Failed to remove payout' })
+    } finally {
+      setPayoutDeleting(false)
+      setDeletingPayout(null)
+    }
+  }
+
+  // Money in and money out in one list, newest entry first
+  const cashLedger: CashLedgerRow[] = [
+    ...cashHistory.map(record => ({ kind: 'in' as const, created_at: record.created_at, record })),
+    ...payouts.map(record => ({ kind: 'out' as const, created_at: record.created_at, record })),
+  ].sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''))
+  const fmtCents = (cents: number) => `$${(Math.abs(cents) / 100).toFixed(2)}`
 
   // Opening a tab from the guide should land at the top of that tab
   const goToTab = (tab: Tab) => {
@@ -806,30 +871,203 @@ export default function AdminDashboardClient({ role, guideFacts }: { role: strin
             </form>
           </div>
 
+          {/* Record Cash Out (coach payout / other expense) */}
+          <div className="rounded-2xl bg-zinc-950 border border-white/5 p-4 sm:p-6">
+            <h3 className="text-lg font-bold mb-1">Record Cash Out</h3>
+            <p className="text-xs text-zinc-500 mb-6">Cash taken out of the drawer, like paying a coach. It shows as a minus in the history below and is subtracted from cash on the Reports tab.</p>
+            {payoutsError && (
+              <p className="mb-4 text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-xl px-3 py-2">
+                Cash out isn&apos;t set up in the database yet. Run <span className="font-mono">database/cash_payouts.sql</span> in Supabase first.
+              </p>
+            )}
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault()
+                setPayoutSubmitting(true)
+                setPayoutMessage(null)
+                try {
+                  const res = await fetch('/api/admin/cash-payout', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payoutForm),
+                  })
+                  const data = await res.json()
+                  if (!res.ok) {
+                    setPayoutMessage({ type: 'error', text: data.error || 'Failed to record cash out' })
+                  } else {
+                    setPayoutMessage({ type: 'success', text: data.message })
+                    setPayoutForm(f => ({ ...f, payeeName: '', amount: '', notes: '' }))
+                    await fetchPayouts()
+                  }
+                } catch (err) {
+                  setPayoutMessage({ type: 'error', text: err instanceof Error ? err.message : 'Failed to record cash out' })
+                } finally {
+                  setPayoutSubmitting(false)
+                }
+              }}
+              className="grid grid-cols-1 sm:grid-cols-2 gap-4"
+            >
+              {/* Type */}
+              <div>
+                <label htmlFor="payout-category" className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-1.5">Type</label>
+                <select
+                  id="payout-category"
+                  value={payoutForm.category}
+                  onChange={(e) => setPayoutForm(f => ({ ...f, category: e.target.value as CashPayoutRecord['category'] }))}
+                  className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none"
+                >
+                  <option value="coach" className="bg-zinc-900">Coach payout</option>
+                  <option value="other" className="bg-zinc-900">Other expense</option>
+                </select>
+              </div>
+
+              {/* Paid To */}
+              <div>
+                <label htmlFor="payout-payee" className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-1.5">
+                  {payoutForm.category === 'coach' ? 'Coach Name' : 'Paid To'}
+                </label>
+                <input
+                  id="payout-payee"
+                  type="text"
+                  required
+                  maxLength={120}
+                  value={payoutForm.payeeName}
+                  onChange={(e) => setPayoutForm(f => ({ ...f, payeeName: e.target.value }))}
+                  placeholder={payoutForm.category === 'coach' ? 'e.g. Coach Mike' : 'e.g. Home Depot'}
+                  className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none placeholder:text-zinc-600"
+                />
+              </div>
+
+              {/* Amount */}
+              <div>
+                <label htmlFor="payout-amount" className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-1.5">Amount Paid Out ($)</label>
+                <input
+                  id="payout-amount"
+                  type="number"
+                  inputMode="decimal"
+                  min="0.01"
+                  max="10000"
+                  step="0.01"
+                  required
+                  value={payoutForm.amount}
+                  onChange={(e) => setPayoutForm(f => ({ ...f, amount: e.target.value }))}
+                  placeholder="e.g. 200"
+                  className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none placeholder:text-zinc-600"
+                />
+              </div>
+
+              {/* Date */}
+              <div>
+                <label htmlFor="payout-date" className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-1.5">Date Paid</label>
+                <input
+                  id="payout-date"
+                  type="date"
+                  required
+                  value={payoutForm.payoutDate}
+                  onChange={(e) => setPayoutForm(f => ({ ...f, payoutDate: e.target.value }))}
+                  className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none"
+                />
+              </div>
+
+              {/* Reason / Notes */}
+              <div className="sm:col-span-2">
+                <label htmlFor="payout-notes" className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-1.5">
+                  {payoutForm.category === 'other' ? 'Reason' : 'Notes (optional)'}
+                </label>
+                <input
+                  id="payout-notes"
+                  type="text"
+                  required={payoutForm.category === 'other'}
+                  maxLength={500}
+                  value={payoutForm.notes}
+                  onChange={(e) => setPayoutForm(f => ({ ...f, notes: e.target.value }))}
+                  placeholder={payoutForm.category === 'other' ? 'e.g. New jump ropes' : 'e.g. Saturday kids classes'}
+                  className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none placeholder:text-zinc-600"
+                />
+              </div>
+
+              {/* Submit */}
+              <div className="sm:col-span-2 flex items-center gap-4">
+                <button
+                  id="payout-submit"
+                  type="submit"
+                  disabled={payoutSubmitting || !payoutForm.payeeName.trim() || !(Number(payoutForm.amount) > 0) || (payoutForm.category === 'other' && !payoutForm.notes.trim())}
+                  className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white font-bold px-6 py-3 rounded-xl transition-colors active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {payoutSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <HandCoins className="w-4 h-4" />}
+                  {payoutSubmitting ? 'Recording...' : 'Record Cash Out'}
+                </button>
+                {payoutMessage && (
+                  <p className={`text-sm font-medium ${
+                    payoutMessage.type === 'success' ? 'text-green-400' : 'text-red-400'
+                  }`}>
+                    {payoutMessage.text}
+                  </p>
+                )}
+              </div>
+            </form>
+          </div>
+
           {/* Cash Payment History */}
           <div className="rounded-2xl bg-zinc-950 border border-white/5 overflow-hidden">
             <div className="p-4 sm:p-6 border-b border-white/5">
               <h3 className="text-lg font-bold">Cash Payment History</h3>
-              <p className="text-xs text-zinc-500 mt-1">All recorded cash payments · {cashHistory.length} records · Use <span className="text-zinc-300">Remove</span> to delete one entered by mistake</p>
+              <p className="text-xs text-zinc-500 mt-1">Money in and cash out · {cashHistory.length} payments · {payouts.length} cash out · Use <span className="text-zinc-300">Remove</span> to delete one entered by mistake</p>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-white/5 text-zinc-500 text-xs uppercase tracking-wider">
-                    <th className="text-left px-4 sm:px-6 py-3 font-semibold">Member</th>
+                    <th className="text-left px-4 sm:px-6 py-3 font-semibold">Member / Paid To</th>
                     <th className="text-left px-4 sm:px-6 py-3 font-semibold">Amount</th>
-                    <th className="text-left px-4 sm:px-6 py-3 font-semibold">Plan</th>
-                    <th className="text-left px-4 sm:px-6 py-3 font-semibold hidden sm:table-cell">Paid On</th>
+                    <th className="text-left px-4 sm:px-6 py-3 font-semibold">Plan / Type</th>
+                    <th className="text-left px-4 sm:px-6 py-3 font-semibold hidden sm:table-cell">Date</th>
                     <th className="text-left px-4 sm:px-6 py-3 font-semibold hidden sm:table-cell">Expires</th>
                     <th className="text-left px-4 sm:px-6 py-3 font-semibold hidden md:table-cell">Notes</th>
                     <th className="text-right px-4 sm:px-6 py-3 font-semibold"><span className="sr-only">Actions</span></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {cashHistory.length === 0 ? (
+                  {cashLedger.length === 0 ? (
                     <tr><td colSpan={7} className="px-6 py-8 text-center text-zinc-600">No cash payments recorded yet</td></tr>
                   ) : (
-                    cashHistory.map(cp => (
+                    cashLedger.map(row => row.kind === 'out' ? (
+                      <tr key={`out-${row.record.id}`} className="border-b border-white/5 bg-red-500/[0.03] hover:bg-red-500/[0.06] transition-colors">
+                        <td className="px-4 sm:px-6 py-3 font-medium text-white">
+                          {row.record.payeeName}
+                        </td>
+                        <td className="px-4 sm:px-6 py-3 font-bold text-red-400 whitespace-nowrap">
+                          -{fmtCents(row.record.amount_cents)}
+                        </td>
+                        <td className="px-4 sm:px-6 py-3 text-xs">
+                          <span className="inline-block px-1.5 py-0.5 rounded font-bold uppercase tracking-wide text-[10px] bg-red-500/10 text-red-400">
+                            {PAYOUT_CATEGORY_LABEL[row.record.category] || 'Cash out'}
+                          </span>
+                        </td>
+                        <td className="px-4 sm:px-6 py-3 text-zinc-300 hidden sm:table-cell">
+                          {new Date(row.record.payout_date).toLocaleDateString(undefined, { timeZone: 'UTC' })}
+                        </td>
+                        <td className="px-4 sm:px-6 py-3 text-zinc-600 hidden sm:table-cell">—</td>
+                        <td className="px-4 sm:px-6 py-3 text-zinc-500 text-xs hidden md:table-cell">
+                          {row.record.notes || '—'}
+                        </td>
+                        <td className="px-4 sm:px-6 py-3 text-right">
+                          <button
+                            id={`payout-remove-${row.record.id}`}
+                            type="button"
+                            onClick={() => setDeletingPayout(row.record)}
+                            title="Remove this cash out"
+                            className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-bold text-red-400 hover:text-white hover:bg-red-600 transition-colors"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span className="hidden sm:inline">Remove</span>
+                          </button>
+                        </td>
+                      </tr>
+                    ) : (() => {
+                      const cp = row.record
+                      return (
                       <tr key={cp.id} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
                         <td className="px-4 sm:px-6 py-3 font-medium text-white">
                           {cp.memberName || 'Unknown'}
@@ -873,7 +1111,8 @@ export default function AdminDashboardClient({ role, guideFacts }: { role: strin
                           </button>
                         </td>
                       </tr>
-                    ))
+                      )
+                    })())
                   )}
                 </tbody>
               </table>
@@ -1058,6 +1297,42 @@ export default function AdminDashboardClient({ role, guideFacts }: { role: strin
               <button
                 onClick={() => setDeletingCash(null)}
                 disabled={cashDeleting}
+                className="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-white text-sm font-bold rounded-xl transition-colors border border-white/5"
+              >
+                Keep it
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Remove Cash Out Modal */}
+      {deletingPayout && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-zinc-950 border border-white/10 rounded-2xl w-full max-w-sm p-6 shadow-2xl relative text-center">
+            <div className="w-12 h-12 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Trash2 className="w-6 h-6" />
+            </div>
+            <h3 className="text-xl font-black text-white mb-2">Remove Cash Out?</h3>
+            <p className="text-sm text-zinc-400 mb-6">
+              Remove the <span className="font-bold text-red-400">-{fmtCents(deletingPayout.amount_cents)}</span> paid to{' '}
+              <span className="font-bold text-white">{deletingPayout.payeeName}</span> on{' '}
+              <span className="font-bold text-white">{new Date(deletingPayout.payout_date).toLocaleDateString(undefined, { timeZone: 'UTC' })}</span>?
+              This can’t be undone.
+            </p>
+
+            <div className="flex flex-col gap-3">
+              <button
+                id="payout-remove-confirm"
+                onClick={confirmDeletePayout}
+                disabled={payoutDeleting}
+                className="w-full py-3 bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white text-sm font-bold rounded-xl transition-colors flex items-center justify-center gap-2"
+              >
+                {payoutDeleting && <Loader2 className="w-4 h-4 animate-spin" />}
+                {payoutDeleting ? 'Removing...' : 'Yes, Remove Cash Out'}
+              </button>
+              <button
+                onClick={() => setDeletingPayout(null)}
+                disabled={payoutDeleting}
                 className="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-white text-sm font-bold rounded-xl transition-colors border border-white/5"
               >
                 Keep it

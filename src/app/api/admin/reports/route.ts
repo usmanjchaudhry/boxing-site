@@ -110,7 +110,8 @@ export async function GET() {
     const subscriptionStatus = Object.entries(statusCounts).filter(([, v]) => v > 0).map(([status, count]) => ({ status, count }))
     const planDistribution = Object.entries(planCounts).map(([plan, count]) => ({ plan, count })).sort((a, b) => b.count - a.count)
 
-    // 4. Revenue per month: card payments (Stripe, minus refunds) + recorded cash
+    // 4. Revenue per month: card payments (Stripe, minus refunds) + recorded cash,
+    //    plus cash paid out (coach payouts / expenses) for net cash
     const card: Record<string, number> = Object.fromEntries(monthKeys.map(k => [k, 0]))
     const cash: Record<string, number> = Object.fromEntries(monthKeys.map(k => [k, 0]))
     let revenueComplete = true
@@ -133,18 +134,34 @@ export async function GET() {
       const k = String(r.payment_date).slice(0, 7)
       if (k in cash) cash[k] += (r.amount_cents || 0) / 100
     }
+    // Cash paid out of the drawer (coach payouts, other expenses). Shown
+    // separately so income stays income: cash in, cash out, net cash.
+    const cashOut: Record<string, number> = Object.fromEntries(monthKeys.map(k => [k, 0]))
+    const { data: payoutRows, error: payoutErr } = await db
+      .from('cash_payouts')
+      .select('amount_cents, payout_date')
+      .gte('payout_date', `${monthKeys[0]}-01`)
+    if (payoutErr) console.error('[reports] Cash payouts failed (run database/cash_payouts.sql?):', payoutErr.message)
+    for (const r of payoutRows ?? []) {
+      const k = String(r.payout_date).slice(0, 7)
+      if (k in cashOut) cashOut[k] += (r.amount_cents || 0) / 100
+    }
+    const round2 = (n: number) => Math.round(n * 100) / 100
     const revenue = monthKeys.map(k => ({
       month: monthLabel(k),
-      revenue: Math.round((card[k] + cash[k]) * 100) / 100,
-      card: Math.round(card[k] * 100) / 100,
-      cash: Math.round(cash[k] * 100) / 100,
+      revenue: round2(card[k] + cash[k]),
+      card: round2(card[k]),
+      cash: round2(cash[k]),
+      cashOut: round2(cashOut[k]),
     }))
-    const round2 = (n: number) => Math.round(n * 100) / 100
     const monthTotals = (key: string) => ({
       label: monthLabel(key),
       total: round2(card[key] + cash[key]),
       card: round2(card[key]),
       cash: round2(cash[key]),
+      cashOut: round2(cashOut[key]),
+      netCash: round2(cash[key] - cashOut[key]),
+      net: round2(card[key] + cash[key] - cashOut[key]),
     })
     // This calendar month so far, and the last full calendar month
     const thisMonth = monthTotals(monthKeys[monthKeys.length - 1])

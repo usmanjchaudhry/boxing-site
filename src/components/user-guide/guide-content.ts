@@ -471,7 +471,7 @@ export function buildGuide(role: StaffRole, facts: GuideFacts): GuideSection[] {
       summary: 'Turn on a membership for someone who paid in cash.',
       icon: Banknote,
       adminOnly: true,
-      keywords: 'cash money paid in person activate renew',
+      keywords: 'cash money paid in person activate renew payout pay coach expense cash out minus',
       blocks: [
         {
           type: 'steps',
@@ -491,6 +491,17 @@ export function buildGuide(role: StaffRole, facts: GuideFacts): GuideSection[] {
             { text: 'Open the **Cash Payments** tab and scroll to **Cash Payment History**.', link: { label: 'Open Cash Payments', tab: 'cash' } },
             { text: 'Double entries are marked **Possible duplicate**. Find the extra one.' },
             { text: 'Click **Remove** on that row, then **Yes, Remove Payment**.', detail: 'This only deletes the payment record. The membership stays on. To turn a membership off, use **Cancel** on the Members tab.' },
+          ],
+        },
+        {
+          type: 'steps',
+          title: 'Paid a coach (or something else) in cash?',
+          steps: [
+            { text: 'Open the **Cash Payments** tab and find **Record Cash Out**.', link: { label: 'Open Cash Payments', tab: 'cash' } },
+            { text: 'Pick the **Type**: **Coach payout** or **Other expense**.' },
+            { text: 'Type who you paid, the **amount**, and the **date**.', detail: 'For **Other expense**, a reason is required (for example \u201cNew jump ropes\u201d).' },
+            { text: 'Click **Record Cash Out**. It shows as a red minus in **Cash Payment History**, and the Reports tab subtracts it from cash.' },
+            { text: 'Entered it wrong? Click **Remove** on that row, then **Yes, Remove Cash Out**.' },
           ],
         },
       ],
