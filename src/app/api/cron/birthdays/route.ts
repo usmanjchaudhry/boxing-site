@@ -55,6 +55,7 @@ export async function GET(request: NextRequest) {
       .from('profiles')
       .select('first_name, email, date_of_birth')
       .not('date_of_birth', 'is', null)
+      .is('deleted_at', null) // no emails to archived members
 
     if (error) throw error
 

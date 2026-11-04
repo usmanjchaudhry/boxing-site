@@ -10,6 +10,11 @@ import type { GuideFacts } from '@/utils/user-guide-facts'
 import { tabsForRole, type AdminTab, type StaffRole } from './admin-tabs'
 import { freezeSubscription, unfreezeSubscription, cancelSubscription } from './actions'
 import { matchesSearch } from '@/utils/name-search'
+import type { NextPayment } from '@/utils/next-payment'
+import { Archive } from 'lucide-react'
+import NextPaymentCell from '@/components/admin/NextPaymentCell'
+import ArchiveMemberDialog from '@/components/admin/ArchiveMemberDialog'
+import ArchivedMembersPanel from '@/components/admin/ArchivedMembersPanel'
 
 interface Stats {
   totalMembers: number
@@ -56,6 +61,8 @@ interface Member {
   stripeCustomerId: string | null
   primaryName: string | null
   hasAuth: boolean
+  /** When the household's next membership payment is due */
+  nextPayment?: NextPayment
 }
 
 type Tab = AdminTab
@@ -94,6 +101,10 @@ export default function AdminDashboardClient({ role, guideFacts }: { role: strin
   const paymentsCursor = useRef<string | null | undefined>(undefined)
   const paymentsLoadingOlder = useRef(false)
   const [paymentsComplete, setPaymentsComplete] = useState(false)
+  // Members tab: active list vs archived list, and the member being archived
+  const [membersView, setMembersView] = useState<'active' | 'archived'>('active')
+  const [archivingMember, setArchivingMember] = useState<Member | null>(null)
+  const [archiveMessage, setArchiveMessage] = useState<string | null>(null)
   // Stripe payments matching the search (by billing name/email or any household member's name)
   const visiblePayments = payments.filter(p => matchesSearch(paymentsSearch, p.customerName, p.customerEmail, p.memberName, ...(p.householdNames ?? [])))
   const [members, setMembers] = useState<Member[]>([])
@@ -538,9 +549,29 @@ export default function AdminDashboardClient({ role, guideFacts }: { role: strin
         <div className="rounded-2xl bg-zinc-950 border border-white/5 overflow-hidden">
           <div className="p-4 sm:p-6 border-b border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <h3 className="text-lg font-bold">All Members</h3>
-              <p className="text-xs text-zinc-500 mt-1">{membersLoading ? 'Loading...' : `${members.length} total members`}</p>
+              <h3 className="text-lg font-bold">{membersView === 'archived' ? 'Archived Members' : 'All Members'}</h3>
+              {membersView === 'active' && (
+                <p className="text-xs text-zinc-500 mt-1">{membersLoading ? 'Loading...' : `${members.length} total members`}</p>
+              )}
             </div>
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full sm:w-auto">
+              {role === 'admin' && (
+                <div className="inline-flex rounded-xl border border-white/10 p-0.5 text-xs font-bold self-start" role="tablist" aria-label="Member list">
+                  {(['active', 'archived'] as const).map(v => (
+                    <button
+                      key={v}
+                      id={`members-view-${v}`}
+                      role="tab"
+                      aria-selected={membersView === v}
+                      onClick={() => { setMembersView(v); setArchiveMessage(null) }}
+                      className={`px-3 py-1.5 rounded-lg capitalize transition-colors ${membersView === v ? 'bg-white text-black' : 'text-zinc-400 hover:text-white'}`}
+                    >
+                      {v}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {membersView === 'active' && (
             <div className="relative w-full sm:w-64">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 pointer-events-none" />
               <input
@@ -551,7 +582,15 @@ export default function AdminDashboardClient({ role, guideFacts }: { role: strin
                 className="w-full bg-black/50 border border-white/10 rounded-xl pl-10 pr-4 py-2 text-sm text-white focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none"
               />
             </div>
+              )}
+            </div>
           </div>
+          {archiveMessage && membersView === 'active' && (
+            <p className="px-4 sm:px-6 py-3 text-sm text-green-400 border-b border-white/5">{archiveMessage}</p>
+          )}
+          {membersView === 'archived' ? (
+            <ArchivedMembersPanel onChanged={fetchMembers} />
+          ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -560,13 +599,14 @@ export default function AdminDashboardClient({ role, guideFacts }: { role: strin
                   <th className="text-left px-4 sm:px-6 py-3 font-semibold">Role</th>
                   <th className="text-left px-4 sm:px-6 py-3 font-semibold hidden sm:table-cell">Plan</th>
                   <th className="text-left px-4 sm:px-6 py-3 font-semibold">Subscription</th>
+                  <th className="text-left px-4 sm:px-6 py-3 font-semibold hidden md:table-cell">Next Payment</th>
                   <th className="text-left px-4 sm:px-6 py-3 font-semibold hidden sm:table-cell">Waiver</th>
                   <th className="text-left px-4 sm:px-6 py-3 font-semibold">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {membersLoading ? (
-                  <tr><td colSpan={6} className="px-6 py-16 text-center">
+                  <tr><td colSpan={7} className="px-6 py-16 text-center">
                     <div className="flex flex-col items-center gap-3">
                       <Loader2 className="w-6 h-6 animate-spin text-red-500" />
                       <span className="text-sm text-zinc-500">Loading members...</span>
@@ -633,6 +673,9 @@ export default function AdminDashboardClient({ role, guideFacts }: { role: strin
                         {m.subscriptionStatus}
                       </span>
                     </td>
+                    <td className="px-4 sm:px-6 py-3 hidden md:table-cell">
+                      <NextPaymentCell next={m.nextPayment} paidBy={m.householdRole === 'Dependent' && m.nextPayment?.kind !== 'none' ? m.primaryName : null} />
+                    </td>
                     <td className="px-4 sm:px-6 py-3 hidden sm:table-cell">
                       {m.hasWaiver
                         ? (m.waiverId
@@ -644,6 +687,7 @@ export default function AdminDashboardClient({ role, guideFacts }: { role: strin
                       }
                     </td>
                     <td className="px-4 sm:px-6 py-3">
+                      <div className="flex flex-wrap items-center gap-2">
                       {/* Freeze/cancel are admin-only on the server, so only admins see the buttons */}
                       {role === 'admin' && m.householdRole === 'Primary' && m.subscriptionStatus !== 'None' && m.householdId && (
                         <div className="flex items-center gap-2">
@@ -677,12 +721,37 @@ export default function AdminDashboardClient({ role, guideFacts }: { role: strin
                           )}
                         </div>
                       )}
+                      {/* Archive: admins only, and not for staff/admin accounts (change their role first) */}
+                      {role === 'admin' && m.role === 'member' && (
+                        <button
+                          id={`archive-${m.id}`}
+                          onClick={() => setArchivingMember(m)}
+                          title={m.householdRole === 'Primary' ? 'Archive this member and their household' : 'Archive this member'}
+                          className="inline-flex items-center gap-1 px-2 py-1 text-zinc-400 hover:text-white hover:bg-zinc-700 text-xs font-bold rounded transition-colors"
+                        >
+                          <Archive className="w-3 h-3" /> Archive
+                        </button>
+                      )}
+                      </div>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+          )}
+          {archivingMember && (
+            <ArchiveMemberDialog
+              member={archivingMember}
+              household={members.filter(x => archivingMember.householdId && x.householdId === archivingMember.householdId).map(x => ({ id: x.id, name: x.name }))}
+              onClose={() => setArchivingMember(null)}
+              onArchived={(msg) => {
+                setArchivingMember(null)
+                setArchiveMessage(msg)
+                fetchMembers()
+              }}
+            />
+          )}
         </div>
       )}
 

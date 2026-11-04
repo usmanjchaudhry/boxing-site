@@ -26,9 +26,26 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   // 1. Get Primary User's Profile
   const { data: profile } = await supabase
     .from('profiles')
-    .select('id, first_name, last_name, date_of_birth')
+    .select('id, first_name, last_name, date_of_birth, deleted_at')
     .eq('auth_user_id', user.id)
     .single()
+
+  // Archived by the gym: no member area. Login is blocked too; this covers a session
+  // that was already open when they were archived.
+  if (profile?.deleted_at) {
+    return (
+      <div className="min-h-screen bg-black text-white font-sans">
+        <Navbar />
+        <main className="max-w-lg mx-auto px-6 py-24 text-center">
+          <h1 className="text-2xl font-black">This account is no longer active</h1>
+          <p className="mt-3 text-zinc-400">Please contact the gym if you think this is a mistake.</p>
+          <form action="/auth/signout" method="post" className="mt-8">
+            <button type="submit" className="px-5 py-2.5 bg-white text-black font-bold rounded-xl hover:bg-zinc-200 transition-colors">Sign out</button>
+          </form>
+        </main>
+      </div>
+    )
+  }
 
   // 2. Fetch entire Household
   let householdMembers: any[] = []
@@ -46,11 +63,15 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         .from('household_members')
         .select(`
           role,
-          profile:profiles(id, first_name, last_name, date_of_birth)
+          profile:profiles(id, first_name, last_name, date_of_birth, deleted_at)
         `)
         .eq('household_id', householdMember.household_id)
       
-      householdMembers = data || []
+      // Leave out anyone the gym archived
+      householdMembers = (data || []).filter((m: { profile: unknown }) => {
+        const p = (Array.isArray(m.profile) ? m.profile[0] : m.profile) as { deleted_at?: string | null } | null
+        return !p?.deleted_at
+      })
     }
   }
 

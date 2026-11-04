@@ -301,7 +301,7 @@ export async function processCheckin(
   // 1. Profile
   const { data: profile } = await db
     .from('profiles')
-    .select('id, first_name, last_name, date_of_birth')
+    .select('id, first_name, last_name, date_of_birth, deleted_at')
     .eq('id', profileId)
     .maybeSingle()
 
@@ -312,6 +312,15 @@ export async function processCheckin(
     }
   }
 
+  // Archived members can't check in (an admin can restore them on the Members tab)
+  if (profile.deleted_at) {
+    await log('No Active Pass')
+    const member = { id: profile.id, first_name: profile.first_name, last_name: profile.last_name, date_of_birth: profile.date_of_birth }
+    return {
+      httpStatus: 200,
+      body: { status: 'denied', flag: 'Account Archived', message: 'This account was archived by the gym. An admin can restore it on the Members tab.', member },
+    }
+  }
   // 2. Access: day pass first, then membership
   const timeZone = facility?.timezone || DEFAULT_TIMEZONE
   const startOfToday = startOfTodayIn(timeZone)

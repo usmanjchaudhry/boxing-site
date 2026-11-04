@@ -148,11 +148,11 @@ export async function GET(request: NextRequest) {
             // Get their profile info
             const { data: profile } = await supabase
               .from('profiles')
-              .select('first_name, email')
+              .select('first_name, email, deleted_at')
               .eq('id', member.profile_id)
               .single()
 
-            if (profile?.email) {
+            if (profile?.email && !profile.deleted_at) { // skip archived members
               const email = weMissYouEmail(profile.first_name)
               await sendGymEmail(profile.email, email.subject, email.html)
               results.weMissYou++
@@ -181,11 +181,11 @@ export async function GET(request: NextRequest) {
         if (primary) {
           const { data: profile } = await supabase
             .from('profiles')
-            .select('first_name, email')
+            .select('first_name, email, deleted_at')
             .eq('id', primary.profile_id)
             .single()
 
-          if (profile?.email) {
+          if (profile?.email && !profile.deleted_at) { // skip archived members
             const email = paymentFailedEmail(profile.first_name)
             await sendGymEmail(profile.email, email.subject, email.html)
             results.paymentFailed++
@@ -227,11 +227,11 @@ export async function GET(request: NextRequest) {
         if (primary) {
           const { data: profile } = await supabase
             .from('profiles')
-            .select('first_name, email')
+            .select('first_name, email, deleted_at')
             .eq('id', primary.profile_id)
             .single()
 
-          if (profile?.email) {
+          if (profile?.email && !profile.deleted_at) { // skip archived members
             const email = subscriptionExpiringEmail(profile.first_name, daysLeft)
             await sendGymEmail(profile.email, email.subject, email.html)
             results.expiring++

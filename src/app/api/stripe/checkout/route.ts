@@ -83,12 +83,15 @@ export async function POST(request: NextRequest) {
     // 2. Get the user's profile and household
     const { data: profile } = await supabase
       .from('profiles')
-      .select('id, first_name, last_name, email')
+      .select('id, first_name, last_name, email, deleted_at')
       .eq('auth_user_id', user.id)
       .single()
 
     if (!profile) {
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 })
+    }
+    if (profile.deleted_at) {
+      return NextResponse.json({ error: 'This account is no longer active. Please contact the gym.' }, { status: 403 })
     }
 
     const { data: householdMember } = await supabase

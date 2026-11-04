@@ -52,7 +52,7 @@ export async function GET(request: NextRequest) {
     recentCheckinsResult
   ] = await Promise.all([
     // Total members
-    db.from('profiles').select('id', { count: 'exact', head: true }),
+    db.from('profiles').select('id', { count: 'exact', head: true }).is('deleted_at', null),
     // Active subscriptions
     db.from('subscriptions').select('id', { count: 'exact', head: true }).eq('status', 'Active'),
     // Today's check-ins
