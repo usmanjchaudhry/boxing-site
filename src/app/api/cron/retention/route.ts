@@ -10,7 +10,9 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://lafamiliashowtimeb
 // Protect this endpoint so only Vercel Cron can call it
 function isAuthorized(request: NextRequest) {
   const authHeader = request.headers.get('authorization')
-  if (authHeader === `Bearer ${process.env.CRON_SECRET}`) return true
+  // An unset CRON_SECRET must not turn into the accepted header "Bearer undefined"
+  const secret = process.env.CRON_SECRET
+  if (secret && authHeader === `Bearer ${secret}`) return true
   // Allow in development
   if (process.env.NODE_ENV === 'development') return true
   return false
