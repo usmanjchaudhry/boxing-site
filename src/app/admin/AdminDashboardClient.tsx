@@ -90,6 +90,10 @@ export default function AdminDashboardClient({ role, guideFacts }: { role: strin
   const [checkins, setCheckins] = useState<CheckinEntry[]>([])
   const [payments, setPayments] = useState<Payment[]>([])
   const [paymentsSearch, setPaymentsSearch] = useState('')
+  // Older Stripe payments load in batches: undefined = not started, null = all loaded
+  const paymentsCursor = useRef<string | null | undefined>(undefined)
+  const paymentsLoadingOlder = useRef(false)
+  const [paymentsComplete, setPaymentsComplete] = useState(false)
   // Stripe payments matching the search (by billing name/email or any household member's name)
   const visiblePayments = payments.filter(p => matchesSearch(paymentsSearch, p.customerName, p.customerEmail, p.memberName, ...(p.householdNames ?? [])))
   const [members, setMembers] = useState<Member[]>([])
@@ -160,13 +164,43 @@ export default function AdminDashboardClient({ role, guideFacts }: { role: strin
 
   const fetchPayments = useCallback(async () => {
     try {
+      // Newest batch (this also runs on every auto-refresh)
       const res = await fetch('/api/admin/payments')
       const data = await res.json()
-      if (data.payments) setPayments(data.payments)
+      if (data.payments) {
+        const fresh: Payment[] = data.payments
+        const freshIds = new Set(fresh.map(p => p.id))
+        const oldestFresh = fresh.length ? fresh[fresh.length - 1].created : Infinity
+        // Keep older payments that were already loaded; the newest batch replaces the rest
+        setPayments(prev => [...fresh, ...prev.filter(p => !freshIds.has(p.id) && p.created <= oldestFresh)])
+        if (paymentsCursor.current === undefined) paymentsCursor.current = data.nextCursor ?? null
+      }
     } catch (err) {
       console.error('Failed to fetch payments:', err)
     } finally {
       setPaymentsLoading(false)
+    }
+
+    // Then pull older batches once, in the background, so search covers every payment
+    if (paymentsLoadingOlder.current) return
+    paymentsLoadingOlder.current = true
+    try {
+      while (paymentsCursor.current) {
+        const res = await fetch(`/api/admin/payments?after=${encodeURIComponent(paymentsCursor.current)}`)
+        const data = await res.json()
+        if (!res.ok || !data.payments) break // try again on the next refresh
+        const older: Payment[] = data.payments
+        setPayments(prev => {
+          const have = new Set(prev.map(p => p.id))
+          return [...prev, ...older.filter(p => !have.has(p.id))]
+        })
+        paymentsCursor.current = data.nextCursor ?? null
+      }
+    } catch (err) {
+      console.error('Failed to fetch older payments:', err)
+    } finally {
+      paymentsLoadingOlder.current = false
+      setPaymentsComplete(paymentsCursor.current === null)
     }
   }, [])
 
@@ -416,7 +450,7 @@ export default function AdminDashboardClient({ role, guideFacts }: { role: strin
                 <p className="text-xs text-zinc-500 mt-1">
                   Every card payment, newest first · {paymentsSearch.trim()
                     ? `${visiblePayments.length} of ${payments.length} match`
-                    : `${payments.length} payments`} · Refreshes about every minute
+                    : `${payments.length} payments`}{paymentsComplete ? '' : ' (loading older payments\u2026)'} · Auto-refreshes every 15s
                 </p>
               </div>
               <div className="relative w-full sm:w-64">

@@ -45,10 +45,10 @@ type PaymentRow = {
   receiptUrl: string | null
 }
 
-// The dashboard polls every 15s. Pulling the whole Stripe history that often is
-// wasteful, so keep the last result for a minute (per server instance).
-const CACHE_MS = 60_000
-let cache: { at: number; payments: PaymentRow[] } | null = null
+// Charges per request: a few Stripe pages, so one request stays quick no matter how
+// long the history gets. The dashboard asks for the next batch until there are none.
+const PAGE_SIZE = 100
+const PAGES_PER_REQUEST = 3
 
 /** Stripe customer id → { primary name, all member names } for every household. */
 async function householdNamesByCustomer() {
@@ -81,27 +81,36 @@ async function householdNamesByCustomer() {
   return byCustomer
 }
 
-// GET /api/admin/payments — Every Stripe payment (newest first), searchable by member
+// GET /api/admin/payments[?after=<charge id>] — Stripe payments, newest first, in batches.
+// Returns { payments, nextCursor }; pass nextCursor back as ?after= for the next batch
+// (null when there are no older payments). This used to return only the 20 most recent
+// charges, so anyone who paid earlier couldn't be found.
 export async function GET(request: NextRequest) {
   const admin = await verifyAdmin()
   if (!admin) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
   }
 
-  if (cache && Date.now() - cache.at < CACHE_MS && !request.nextUrl.searchParams.has('fresh')) {
-    return NextResponse.json({ payments: cache.payments })
+  const after = request.nextUrl.searchParams.get('after')
+  if (after && !/^[A-Za-z0-9_]{1,255}$/.test(after)) {
+    return NextResponse.json({ error: 'Invalid cursor' }, { status: 400 })
   }
 
   try {
-    // This used to show only the 20 most recent charges, so anyone who paid
-    // earlier couldn't be found. Page through the whole history instead.
-    const [names, charges] = await Promise.all([
+    const [names, { charges, nextCursor }] = await Promise.all([
       householdNamesByCustomer(),
       (async () => {
-        const all: Stripe.Charge[] = []
-        // Expand the customer so its name/email can stand in when billing details are blank
-        for await (const c of stripe.charges.list({ limit: 100, expand: ['data.customer'] }) as AsyncIterable<Stripe.Charge>) all.push(c)
-        return all
+        const charges: Stripe.Charge[] = []
+        let cursor = after || undefined
+        let hasMore = true
+        for (let page = 0; page < PAGES_PER_REQUEST && hasMore; page++) {
+          // Expand the customer so its name/email can stand in when billing details are blank
+          const res = await stripe.charges.list({ limit: PAGE_SIZE, starting_after: cursor, expand: ['data.customer'] })
+          charges.push(...res.data)
+          hasMore = res.has_more && res.data.length > 0
+          cursor = res.data[res.data.length - 1]?.id
+        }
+        return { charges, nextCursor: hasMore ? cursor ?? null : null }
       })(),
     ])
 
@@ -124,8 +133,7 @@ export async function GET(request: NextRequest) {
       }
     })
 
-    cache = { at: Date.now(), payments }
-    return NextResponse.json({ payments })
+    return NextResponse.json({ payments, nextCursor })
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     console.error('Failed to fetch payments:', message)
