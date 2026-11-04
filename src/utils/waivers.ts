@@ -12,6 +12,7 @@ import {
 } from '@/legal/waiver-documents'
 import { DEFAULT_TIMEZONE, localDateString, addDays } from '@/utils/timezone'
 import { nameMatches, initialsValid } from '@/utils/name-match'
+import { fetchAll, chunk } from '@/utils/supabase-paging'
 
 export { nameMatches }
 
@@ -191,17 +192,33 @@ export async function getWaiverStatuses(
   const statuses = new Map<string, WaiverStatus>()
   if (participants.length === 0) return statuses
 
-  const { data: rows, error } = await db
-    .from('waivers')
-    .select('id, participant_id, waiver_template_id, kind, expiry_date, participant_age, signature_date')
-    .in('participant_id', participants.map(p => p.id))
-    .eq('is_valid', true)
-    .order('signature_date', { ascending: false })
-  if (error) throw new Error(`Could not read waivers: ${error.message}`)
+  // Batched so a long participant list (e.g. the admin member list) doesn't make the
+  // request URL too long, and paged because Supabase caps each response at 1000 rows.
+  type WaiverRow = { id: string; participant_id: string; waiver_template_id: string; kind: string | null; expiry_date: string | null; participant_age: number | null; signature_date: string }
+  const byParticipant = new Map<string, WaiverRow[]>()
+  try {
+    const batches = await Promise.all(chunk(participants.map(p => p.id), 150).map(ids =>
+      fetchAll<WaiverRow>((from, to) => db
+        .from('waivers')
+        .select('id, participant_id, waiver_template_id, kind, expiry_date, participant_age, signature_date')
+        .in('participant_id', ids)
+        .eq('is_valid', true)
+        .order('signature_date', { ascending: false })
+        .order('id')
+        .range(from, to))
+    ))
+    for (const r of batches.flat()) {
+      const list = byParticipant.get(r.participant_id)
+      if (list) list.push(r)
+      else byParticipant.set(r.participant_id, [r])
+    }
+  } catch (e) {
+    throw new Error(`Could not read waivers: ${e instanceof Error ? e.message : e}`)
+  }
 
   for (const p of participants) {
     const age = ageOn(p.date_of_birth, today)
-    const mine = (rows ?? []).filter(r => r.participant_id === p.id)
+    const mine = byParticipant.get(p.id) ?? []
     const status: WaiverStatus = { participantId: p.id, age, isMinor: age < 18, complete: true, missing: [], signedIds: {} }
 
     for (const doc of requiredDocuments(age)) {

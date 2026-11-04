@@ -3,6 +3,7 @@ import { createClient } from '@/utils/supabase/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { cashMembershipEnded } from '@/utils/membership-expiry'
 import { getWaiverStatuses, type WaiverStatus } from '@/utils/waivers'
+import { fetchAll } from '@/utils/supabase-paging'
 
 function getAdminSupabase() {
   return createAdminClient(
@@ -36,28 +37,53 @@ export async function GET(request: NextRequest) {
 
   const db = getAdminSupabase()
 
-  // Query profiles with household info
-  const { data: profiles, error: profilesErr } = await db
-    .from('profiles')
-    .select(`
-      id, first_name, last_name, date_of_birth, role, created_at, auth_user_id,
-      household_members(
-        role,
-        household_id
-      )
-    `)
-    .order('created_at', { ascending: false })
-    .limit(100)
-
-  if (profilesErr) {
-    console.error('Failed to fetch profiles:', profilesErr)
-    return NextResponse.json({ error: profilesErr.message }, { status: 500 })
+  // Every profile with household info. This used to stop at the newest 100, so older
+  // members dropped out of the list (and its search) once the gym grew past that.
+  // Supabase also caps each request at 1000 rows, so all of these queries page through.
+  let profiles, subs, households, allHouseholdMembers
+  try {
+    ;[profiles, subs, households, allHouseholdMembers] = await Promise.all([
+      fetchAll((from, to) => db
+        .from('profiles')
+        .select(`
+          id, first_name, last_name, date_of_birth, role, created_at, auth_user_id,
+          household_members(
+            role,
+            household_id
+          )
+        `)
+        .order('created_at', { ascending: false })
+        .order('id') // tie-breaker so paging never skips or repeats a row
+        .range(from, to)),
+      // All subscriptions with plan names + stripe subscription ID
+      fetchAll((from, to) => db
+        .from('subscriptions')
+        .select('household_id, status, end_date, payment_method, stripe_subscription_id, membership_plans(name, max_dependents)')
+        .order('id')
+        .range(from, to)),
+      // Household → stripe_customer_id mapping
+      fetchAll((from, to) => db
+        .from('households')
+        .select('id, stripe_customer_id')
+        .order('id')
+        .range(from, to)),
+      // All household members to build primary→dependent relationships
+      fetchAll((from, to) => db
+        .from('household_members')
+        .select('profile_id, household_id, role')
+        .order('profile_id')
+        .order('household_id')
+        .range(from, to)),
+    ])
+  } catch (e) {
+    console.error('Failed to fetch members:', e)
+    return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 })
   }
 
   // Waiver status: current version of every required document (same rule as the scanner)
   let waiverStatuses = new Map<string, WaiverStatus>()
   try {
-    waiverStatuses = await getWaiverStatuses(db, profiles || [])
+    waiverStatuses = await getWaiverStatuses(db, profiles)
   } catch (e) {
     console.error('Failed to load waiver statuses:', e)
   }
@@ -72,16 +98,11 @@ export async function GET(request: NextRequest) {
     return { hasWaiver: s.complete, waiverState, waiverId: s.signedIds.liability ?? null }
   }
 
-  // Get all subscriptions with plan names + stripe subscription ID
-  const { data: subs } = await db
-    .from('subscriptions')
-    .select('household_id, status, end_date, payment_method, stripe_subscription_id, membership_plans(name, max_dependents)')
-
   // Cash memberships end on their own. They used to flip to Cancelled only when the
   // member scanned or opened their dashboard, so staff still saw "Active" here.
   // Same rule as the scanner (cashMembershipEnded); also saved so every screen agrees.
   const now = new Date()
-  const expiredHouseholds = (subs || [])
+  const expiredHouseholds = subs
     .filter(s => cashMembershipEnded(s, now))
     .map(s => s.household_id)
   if (expiredHouseholds.length > 0) {
@@ -90,7 +111,7 @@ export async function GET(request: NextRequest) {
   }
 
   const subMap: Record<string, { status: string; planName: string; stripeSubId: string | null; maxDependents: number }> = {}
-  for (const s of subs || []) {
+  for (const s of subs) {
     const plan = s.membership_plans as any
     subMap[s.household_id] = {
       status: expiredHouseholds.includes(s.household_id) ? 'Cancelled' : s.status,
@@ -100,26 +121,17 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // Get household stripe_customer_id mapping
-  const { data: households } = await db
-    .from('households')
-    .select('id, stripe_customer_id')
-
   const householdStripeMap: Record<string, string | null> = {}
-  for (const h of households || []) {
+  for (const h of households) {
     householdStripeMap[h.id] = h.stripe_customer_id
   }
 
-  // Get all household members to build primary→dependent relationships
-  const { data: allHouseholdMembers } = await db
-    .from('household_members')
-    .select('profile_id, household_id, role')
-
   // Build: householdId → primary profile name
+  const profileById = new Map(profiles.map(p => [p.id, p]))
   const householdPrimaryMap: Record<string, string> = {}
-  for (const hm of allHouseholdMembers || []) {
+  for (const hm of allHouseholdMembers) {
     if (hm.role === 'Primary') {
-      const primary = (profiles || []).find(p => p.id === hm.profile_id)
+      const primary = profileById.get(hm.profile_id)
       if (primary) {
         householdPrimaryMap[hm.household_id] = `${primary.first_name} ${primary.last_name}`
       }
@@ -127,7 +139,7 @@ export async function GET(request: NextRequest) {
   }
 
   // Flatten
-  const members = (profiles || []).map(p => {
+  const members = profiles.map(p => {
     const hm = (p.household_members as any[])?.[0]
     const householdId = hm?.household_id
     const sub = householdId ? subMap[householdId] : null
