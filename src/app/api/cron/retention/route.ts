@@ -10,7 +10,9 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://lafamiliashowtimeb
 // Protect this endpoint so only Vercel Cron can call it
 function isAuthorized(request: NextRequest) {
   const authHeader = request.headers.get('authorization')
-  if (authHeader === `Bearer ${process.env.CRON_SECRET}`) return true
+  // An unset CRON_SECRET must not turn into the accepted header "Bearer undefined"
+  const secret = process.env.CRON_SECRET
+  if (secret && authHeader === `Bearer ${secret}`) return true
   // Allow in development
   if (process.env.NODE_ENV === 'development') return true
   return false
@@ -148,11 +150,11 @@ export async function GET(request: NextRequest) {
             // Get their profile info
             const { data: profile } = await supabase
               .from('profiles')
-              .select('first_name, email')
+              .select('first_name, email, deleted_at')
               .eq('id', member.profile_id)
               .single()
 
-            if (profile?.email) {
+            if (profile?.email && !profile.deleted_at) { // skip archived members
               const email = weMissYouEmail(profile.first_name)
               await sendGymEmail(profile.email, email.subject, email.html)
               results.weMissYou++
@@ -181,11 +183,11 @@ export async function GET(request: NextRequest) {
         if (primary) {
           const { data: profile } = await supabase
             .from('profiles')
-            .select('first_name, email')
+            .select('first_name, email, deleted_at')
             .eq('id', primary.profile_id)
             .single()
 
-          if (profile?.email) {
+          if (profile?.email && !profile.deleted_at) { // skip archived members
             const email = paymentFailedEmail(profile.first_name)
             await sendGymEmail(profile.email, email.subject, email.html)
             results.paymentFailed++
@@ -227,11 +229,11 @@ export async function GET(request: NextRequest) {
         if (primary) {
           const { data: profile } = await supabase
             .from('profiles')
-            .select('first_name, email')
+            .select('first_name, email, deleted_at')
             .eq('id', primary.profile_id)
             .single()
 
-          if (profile?.email) {
+          if (profile?.email && !profile.deleted_at) { // skip archived members
             const email = subscriptionExpiringEmail(profile.first_name, daysLeft)
             await sendGymEmail(profile.email, email.subject, email.html)
             results.expiring++

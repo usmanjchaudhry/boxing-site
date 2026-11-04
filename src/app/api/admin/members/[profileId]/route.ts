@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/utils/supabase/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
+import { stripe } from '@/utils/stripe/server'
+import { permanentlyDeleteMember, ArchiveError } from '@/utils/member-archive'
 
 function getAdminSupabase() {
   return createAdminClient(
@@ -80,4 +82,28 @@ export async function PATCH(
     success: true, 
     message: `${target.first_name} ${target.last_name} is now a ${role}` 
   })
+}
+
+// DELETE /api/admin/members/[profileId] — Permanently delete an ARCHIVED member
+// (their household too if they're the primary). Only allowed when they have no
+// history (check-ins, passes, payments); otherwise they stay archived. Admins only.
+export async function DELETE(
+  _request: NextRequest,
+  { params }: { params: Promise<{ profileId: string }> }
+) {
+  const { profileId } = await params
+
+  const admin = await verifyAdmin()
+  if (!admin) {
+    return NextResponse.json({ error: 'Unauthorized — admin only' }, { status: 403 })
+  }
+
+  try {
+    const result = await permanentlyDeleteMember(getAdminSupabase(), stripe, profileId, admin.id)
+    return NextResponse.json({ success: true, ...result })
+  } catch (e) {
+    if (e instanceof ArchiveError) return NextResponse.json({ error: e.message }, { status: e.status })
+    console.error('[delete] Unexpected error:', e)
+    return NextResponse.json({ error: 'Could not delete this member.' }, { status: 500 })
+  }
 }

@@ -4,6 +4,7 @@ import { stripe } from '@/utils/stripe/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { sendGymEmail } from '@/utils/email'
 import { currentPeriod, localStatusFromStripe, subscriptionIdFromInvoice } from '@/utils/stripe-status'
+import { fulfillDayPass } from '@/utils/day-pass-fulfillment'
 
 // We need the service role key here because webhooks don't have a user session
 function getAdminClient() {
@@ -130,13 +131,21 @@ export async function POST(request: NextRequest) {
             console.warn('[webhook] Checkout completed but not paid; no pass minted:', session.id, session.payment_status)
             break
           }
-          // It's a Day Pass (or retail item)! Mint the pass for the user.
-          const { error } = await supabase.from('passes').insert({
-            profile_id: profileId,
-            pass_type: 'Day Pass',
-            status: 'Available'
-          })
-          assertOk(error, 'Failed to mint pass')
+          // Only a Day Pass product grants entry (same rule as the success page), so
+          // buying anything else can never turn into gym access.
+          const { data: product, error: productError } = await supabase.from('products').select('category').eq('id', productId).maybeSingle()
+          assertOk(productError, 'Failed to read product')
+          if (product?.category !== 'DayPass') {
+            console.log('[webhook] Paid checkout for a non-day-pass product; no pass minted:', session.id, productId)
+            break
+          }
+          // Mint the pass for the user, once per checkout: the success page may
+          // already have done it, and Stripe can re-deliver events.
+          const minted = await fulfillDayPass(supabase, session.id, profileId)
+          if (minted === 'already') {
+            console.log('[webhook] Day pass for checkout', session.id, 'was already minted')
+            break
+          }
           console.log('Successfully minted Day Pass for profile:', profileId)
           const email = session.customer_details?.email
           if (email) {

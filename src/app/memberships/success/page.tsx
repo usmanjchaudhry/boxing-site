@@ -6,6 +6,7 @@ import Navbar from '@/components/Navbar'
 import { stripe } from '@/utils/stripe/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { currentPeriod, localStatusFromStripe } from '@/utils/stripe-status'
+import { fulfillDayPass } from '@/utils/day-pass-fulfillment'
 
 function getAdminDb() {
   return createAdminClient(
@@ -60,36 +61,21 @@ export default async function MembershipSuccessPage({
           console.warn('[success-page] Subscription', stripeSubscriptionId, 'is', sub.status, '- not activating')
         }
       } 
-      // Handle one-time purchases (like Day Passes)
-      else if (session.metadata?.product_id && session.metadata?.profile_id) {
+      // Handle one-time purchases (like Day Passes). Only once Stripe says it's paid:
+      // a checkout that was opened and abandoned has a session id too. The pass id
+      // comes from the session, so reloading this page never adds another pass.
+      else if (session.metadata?.product_id && session.metadata?.profile_id && session.payment_status === 'paid') {
         const adminDb = getAdminDb()
         const productId = session.metadata.product_id
         const profileId = session.metadata.profile_id
 
         // Check if it's a day pass
         const { data: product } = await adminDb.from('products').select('category').eq('id', productId).single()
-        
+
         if (product?.category === 'DayPass') {
           console.log('[success-page] Confirming Day Pass for profile:', profileId)
-          
-          // Check if this specific checkout session already created a pass (idempotency)
-          // Since we can't use sessionId in the UUID column, we'll check if any pass was created in the last 1 minute
-          const oneMinuteAgo = new Date(Date.now() - 60000).toISOString()
-          const { data: existing } = await adminDb
-            .from('passes')
-            .select('id')
-            .eq('profile_id', profileId)
-            .gte('created_at', oneMinuteAgo)
-            .maybeSingle()
-          
-          if (!existing) {
-            const { error } = await adminDb.from('passes').insert({
-              profile_id: profileId,
-              pass_type: 'Day Pass',
-              status: 'Available'
-            })
-            if (error) console.error('[success-page] Error minting day pass:', error)
-          }
+          const result = await fulfillDayPass(adminDb, session.id, profileId)
+          console.log('[success-page] Day pass', result, 'for checkout', session.id)
         }
       }
     } catch (err: any) {

@@ -9,6 +9,12 @@ import UserGuideTab from '@/components/user-guide/UserGuideTab'
 import type { GuideFacts } from '@/utils/user-guide-facts'
 import { tabsForRole, type AdminTab, type StaffRole } from './admin-tabs'
 import { freezeSubscription, unfreezeSubscription, cancelSubscription } from './actions'
+import { matchesSearch } from '@/utils/name-search'
+import type { NextPayment } from '@/utils/next-payment'
+import { Archive } from 'lucide-react'
+import NextPaymentCell from '@/components/admin/NextPaymentCell'
+import ArchiveMemberDialog from '@/components/admin/ArchiveMemberDialog'
+import ArchivedMembersPanel from '@/components/admin/ArchivedMembersPanel'
 
 interface Stats {
   totalMembers: number
@@ -34,6 +40,10 @@ interface Payment {
   customerName: string
   description: string
   receiptUrl: string | null
+  /** Primary member of the household behind this Stripe customer */
+  memberName: string | null
+  /** Everyone in that household (searchable) */
+  householdNames: string[]
 }
 
 interface Member {
@@ -51,6 +61,8 @@ interface Member {
   stripeCustomerId: string | null
   primaryName: string | null
   hasAuth: boolean
+  /** When the household's next membership payment is due */
+  nextPayment?: NextPayment
 }
 
 type Tab = AdminTab
@@ -106,6 +118,17 @@ export default function AdminDashboardClient({ role, guideFacts }: { role: strin
   const [stats, setStats] = useState<Stats | null>(null)
   const [checkins, setCheckins] = useState<CheckinEntry[]>([])
   const [payments, setPayments] = useState<Payment[]>([])
+  const [paymentsSearch, setPaymentsSearch] = useState('')
+  // Older Stripe payments load in batches: undefined = not started, null = all loaded
+  const paymentsCursor = useRef<string | null | undefined>(undefined)
+  const paymentsLoadingOlder = useRef(false)
+  const [paymentsComplete, setPaymentsComplete] = useState(false)
+  // Members tab: active list vs archived list, and the member being archived
+  const [membersView, setMembersView] = useState<'active' | 'archived'>('active')
+  const [archivingMember, setArchivingMember] = useState<Member | null>(null)
+  const [archiveMessage, setArchiveMessage] = useState<string | null>(null)
+  // Stripe payments matching the search (by billing name/email or any household member's name)
+  const visiblePayments = payments.filter(p => matchesSearch(paymentsSearch, p.customerName, p.customerEmail, p.memberName, ...(p.householdNames ?? [])))
   const [members, setMembers] = useState<Member[]>([])
   const [loading, setLoading] = useState(true)
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
@@ -182,13 +205,43 @@ export default function AdminDashboardClient({ role, guideFacts }: { role: strin
 
   const fetchPayments = useCallback(async () => {
     try {
+      // Newest batch (this also runs on every auto-refresh)
       const res = await fetch('/api/admin/payments')
       const data = await res.json()
-      if (data.payments) setPayments(data.payments)
+      if (data.payments) {
+        const fresh: Payment[] = data.payments
+        const freshIds = new Set(fresh.map(p => p.id))
+        const oldestFresh = fresh.length ? fresh[fresh.length - 1].created : Infinity
+        // Keep older payments that were already loaded; the newest batch replaces the rest
+        setPayments(prev => [...fresh, ...prev.filter(p => !freshIds.has(p.id) && p.created <= oldestFresh)])
+        if (paymentsCursor.current === undefined) paymentsCursor.current = data.nextCursor ?? null
+      }
     } catch (err) {
       console.error('Failed to fetch payments:', err)
     } finally {
       setPaymentsLoading(false)
+    }
+
+    // Then pull older batches once, in the background, so search covers every payment
+    if (paymentsLoadingOlder.current) return
+    paymentsLoadingOlder.current = true
+    try {
+      while (paymentsCursor.current) {
+        const res = await fetch(`/api/admin/payments?after=${encodeURIComponent(paymentsCursor.current)}`)
+        const data = await res.json()
+        if (!res.ok || !data.payments) break // try again on the next refresh
+        const older: Payment[] = data.payments
+        setPayments(prev => {
+          const have = new Set(prev.map(p => p.id))
+          return [...prev, ...older.filter(p => !have.has(p.id))]
+        })
+        paymentsCursor.current = data.nextCursor ?? null
+      }
+    } catch (err) {
+      console.error('Failed to fetch older payments:', err)
+    } finally {
+      paymentsLoadingOlder.current = false
+      setPaymentsComplete(paymentsCursor.current === null)
     }
   }, [])
 
@@ -467,8 +520,28 @@ export default function AdminDashboardClient({ role, guideFacts }: { role: strin
       {activeTab === 'payments' && (
         <div className="rounded-2xl bg-zinc-950 border border-white/5 overflow-hidden">
           <div className="p-4 sm:p-6 border-b border-white/5">
-            <h3 className="text-lg font-bold">Recent Payments (from Stripe)</h3>
-            <p className="text-xs text-zinc-500 mt-1">Data pulled directly from Stripe API · Auto-refreshes every 15s</p>
+            <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-bold">Payments (from Stripe)</h3>
+                <p className="text-xs text-zinc-500 mt-1">
+                  Every card payment, newest first · {paymentsSearch.trim()
+                    ? `${visiblePayments.length} of ${payments.length} match`
+                    : `${payments.length} payments`}{paymentsComplete ? '' : ' (loading older payments\u2026)'} · Auto-refreshes every 15s
+                </p>
+              </div>
+              <div className="relative w-full sm:w-64">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 pointer-events-none" />
+                <input
+                  id="payments-search"
+                  type="search"
+                  placeholder="Search name or email..."
+                  aria-label="Search payments by member name or email"
+                  value={paymentsSearch}
+                  onChange={(e) => setPaymentsSearch(e.target.value)}
+                  className="w-full bg-black/50 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none placeholder:text-zinc-600"
+                />
+              </div>
+            </div>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -491,12 +564,18 @@ export default function AdminDashboardClient({ role, guideFacts }: { role: strin
                   </td></tr>
                 ) : payments.length === 0 ? (
                   <tr><td colSpan={5} className="px-6 py-8 text-center text-zinc-600">No payments found</td></tr>
+                ) : visiblePayments.length === 0 ? (
+                  <tr><td colSpan={5} className="px-6 py-8 text-center text-zinc-600">No payments match &ldquo;{paymentsSearch}&rdquo;</td></tr>
                 ) : (
-                  payments.map(p => (
+                  visiblePayments
+                    .map(p => (
                     <tr key={p.id} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
                       <td className="px-4 sm:px-6 py-3">
                         <p className="font-medium">{p.customerName}</p>
                         <p className="text-xs text-zinc-500">{p.customerEmail}</p>
+                        {p.memberName && p.memberName !== p.customerName && (
+                          <p className="text-xs text-zinc-600">Member: <span className="text-zinc-400">{p.memberName}</span></p>
+                        )}
                       </td>
                       <td className="px-4 sm:px-6 py-3 font-bold text-green-400">
                         ${(p.amount / 100).toFixed(2)}
@@ -535,9 +614,29 @@ export default function AdminDashboardClient({ role, guideFacts }: { role: strin
         <div className="rounded-2xl bg-zinc-950 border border-white/5 overflow-hidden">
           <div className="p-4 sm:p-6 border-b border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <h3 className="text-lg font-bold">All Members</h3>
-              <p className="text-xs text-zinc-500 mt-1">{membersLoading ? 'Loading...' : `${members.length} total members`}</p>
+              <h3 className="text-lg font-bold">{membersView === 'archived' ? 'Archived Members' : 'All Members'}</h3>
+              {membersView === 'active' && (
+                <p className="text-xs text-zinc-500 mt-1">{membersLoading ? 'Loading...' : `${members.length} total members`}</p>
+              )}
             </div>
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full sm:w-auto">
+              {role === 'admin' && (
+                <div className="inline-flex rounded-xl border border-white/10 p-0.5 text-xs font-bold self-start" role="tablist" aria-label="Member list">
+                  {(['active', 'archived'] as const).map(v => (
+                    <button
+                      key={v}
+                      id={`members-view-${v}`}
+                      role="tab"
+                      aria-selected={membersView === v}
+                      onClick={() => { setMembersView(v); setArchiveMessage(null) }}
+                      className={`px-3 py-1.5 rounded-lg capitalize transition-colors ${membersView === v ? 'bg-white text-black' : 'text-zinc-400 hover:text-white'}`}
+                    >
+                      {v}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {membersView === 'active' && (
             <div className="relative w-full sm:w-64">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 pointer-events-none" />
               <input
@@ -548,7 +647,15 @@ export default function AdminDashboardClient({ role, guideFacts }: { role: strin
                 className="w-full bg-black/50 border border-white/10 rounded-xl pl-10 pr-4 py-2 text-sm text-white focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none"
               />
             </div>
+              )}
+            </div>
           </div>
+          {archiveMessage && membersView === 'active' && (
+            <p className="px-4 sm:px-6 py-3 text-sm text-green-400 border-b border-white/5">{archiveMessage}</p>
+          )}
+          {membersView === 'archived' ? (
+            <ArchivedMembersPanel onChanged={fetchMembers} />
+          ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -557,20 +664,21 @@ export default function AdminDashboardClient({ role, guideFacts }: { role: strin
                   <th className="text-left px-4 sm:px-6 py-3 font-semibold">Role</th>
                   <th className="text-left px-4 sm:px-6 py-3 font-semibold hidden sm:table-cell">Plan</th>
                   <th className="text-left px-4 sm:px-6 py-3 font-semibold">Subscription</th>
+                  <th className="text-left px-4 sm:px-6 py-3 font-semibold hidden md:table-cell">Next Payment</th>
                   <th className="text-left px-4 sm:px-6 py-3 font-semibold hidden sm:table-cell">Waiver</th>
                   <th className="text-left px-4 sm:px-6 py-3 font-semibold">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {membersLoading ? (
-                  <tr><td colSpan={6} className="px-6 py-16 text-center">
+                  <tr><td colSpan={7} className="px-6 py-16 text-center">
                     <div className="flex flex-col items-center gap-3">
                       <Loader2 className="w-6 h-6 animate-spin text-red-500" />
                       <span className="text-sm text-zinc-500">Loading members...</span>
                     </div>
                   </td></tr>
                 ) : members
-                  .filter(m => m.name.toLowerCase().includes(membersTabSearch.toLowerCase()))
+                  .filter(m => matchesSearch(membersTabSearch, m.name))
                   .map(m => (
                   <tr key={m.id} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
                     <td className="px-4 sm:px-6 py-3">
@@ -630,6 +738,9 @@ export default function AdminDashboardClient({ role, guideFacts }: { role: strin
                         {m.subscriptionStatus}
                       </span>
                     </td>
+                    <td className="px-4 sm:px-6 py-3 hidden md:table-cell">
+                      <NextPaymentCell next={m.nextPayment} paidBy={m.householdRole === 'Dependent' && m.nextPayment?.kind !== 'none' ? m.primaryName : null} />
+                    </td>
                     <td className="px-4 sm:px-6 py-3 hidden sm:table-cell">
                       {m.hasWaiver
                         ? (m.waiverId
@@ -641,6 +752,7 @@ export default function AdminDashboardClient({ role, guideFacts }: { role: strin
                       }
                     </td>
                     <td className="px-4 sm:px-6 py-3">
+                      <div className="flex flex-wrap items-center gap-2">
                       {/* Freeze/cancel are admin-only on the server, so only admins see the buttons */}
                       {role === 'admin' && m.householdRole === 'Primary' && m.subscriptionStatus !== 'None' && m.householdId && (
                         <div className="flex items-center gap-2">
@@ -674,12 +786,37 @@ export default function AdminDashboardClient({ role, guideFacts }: { role: strin
                           )}
                         </div>
                       )}
+                      {/* Archive: admins only, and not for staff/admin accounts (change their role first) */}
+                      {role === 'admin' && m.role === 'member' && (
+                        <button
+                          id={`archive-${m.id}`}
+                          onClick={() => setArchivingMember(m)}
+                          title={m.householdRole === 'Primary' ? 'Archive this member and their household' : 'Archive this member'}
+                          className="inline-flex items-center gap-1 px-2 py-1 text-zinc-400 hover:text-white hover:bg-zinc-700 text-xs font-bold rounded transition-colors"
+                        >
+                          <Archive className="w-3 h-3" /> Archive
+                        </button>
+                      )}
+                      </div>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+          )}
+          {archivingMember && (
+            <ArchiveMemberDialog
+              member={archivingMember}
+              household={members.filter(x => archivingMember.householdId && x.householdId === archivingMember.householdId).map(x => ({ id: x.id, name: x.name }))}
+              onClose={() => setArchivingMember(null)}
+              onArchived={(msg) => {
+                setArchivingMember(null)
+                setArchiveMessage(msg)
+                fetchMembers()
+              }}
+            />
+          )}
         </div>
       )}
 
@@ -752,35 +889,59 @@ export default function AdminDashboardClient({ role, guideFacts }: { role: strin
                 </div>
                 {showMemberDropdown && (
                   <div className="absolute z-50 w-full mt-1 bg-zinc-900 border border-white/10 rounded-xl shadow-2xl max-h-48 overflow-y-auto">
-                    {members
-                      .filter(m => m.householdRole === 'Primary')
-                      .filter(m => m.name.toLowerCase().includes(memberSearch.toLowerCase()))
-                      .map(m => (
+                    {(() => {
+                      // Everyone is searchable here. Cash pays for the whole household,
+                      // so picking a dependent activates their primary's membership.
+                      const matches = members.filter(m => matchesSearch(memberSearch, m.name))
+                      if (matches.length === 0) return <p className="px-4 py-3 text-xs text-zinc-600">No members found</p>
+                      return matches.map(m => {
+                        const noHousehold = !m.householdId
+                        return (
                         <button
                           key={m.id}
                           type="button"
+                          disabled={noHousehold}
+                          title={noHousehold ? 'This member has no household yet, so a cash payment cannot be recorded for them' : undefined}
                           onClick={() => {
                             setCashForm(f => ({ ...f, profileId: m.id }))
                             setMemberSearch(m.name)
                             setShowMemberDropdown(false)
                           }}
-                          className={`w-full text-left px-4 py-2.5 text-sm hover:bg-white/5 transition-colors flex justify-between items-center ${
+                          className={`w-full text-left px-4 py-2.5 text-sm hover:bg-white/5 transition-colors flex justify-between items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed ${
                             cashForm.profileId === m.id ? 'bg-red-500/10 text-red-400' : 'text-zinc-300'
                           }`}
                         >
-                          <span>{m.name}</span>
-                          <span className={`text-xs px-1.5 py-0.5 rounded ${
+                          <span className="min-w-0">
+                            <span className="block truncate">{m.name}</span>
+                            {noHousehold ? (
+                              <span className="block text-[11px] text-zinc-500">No household</span>
+                            ) : m.householdRole !== 'Primary' && (
+                              <span className="block text-[11px] text-zinc-500 truncate">
+                                {m.householdRole}{m.primaryName ? ` of ${m.primaryName}` : ''}
+                              </span>
+                            )}
+                          </span>
+                          <span className={`shrink-0 text-xs px-1.5 py-0.5 rounded ${
                             m.subscriptionStatus === 'Active' ? 'text-green-400 bg-green-500/10'
                             : m.subscriptionStatus === 'None' ? 'text-zinc-500 bg-zinc-500/10'
                             : 'text-amber-400 bg-amber-500/10'
                           }`}>{m.subscriptionStatus}</span>
                         </button>
-                      ))}
-                    {members.filter(m => m.householdRole === 'Primary').filter(m => m.name.toLowerCase().includes(memberSearch.toLowerCase())).length === 0 && (
-                      <p className="px-4 py-3 text-xs text-zinc-600">No members found</p>
-                    )}
+                        )
+                      })
+                    })()}
                   </div>
                 )}
+                {(() => {
+                  const picked = members.find(m => m.id === cashForm.profileId)
+                  if (!picked || picked.householdRole === 'Primary') return null
+                  return (
+                    <p className="text-[11px] text-amber-400/90 mt-1">
+                      {picked.name} is on {picked.primaryName ? `${picked.primaryName}'s` : 'another member\u2019s'} household.
+                      This payment activates that household&apos;s membership. Pick a family plan to cover them.
+                    </p>
+                  )
+                })()}
                 {/* Hidden required input for form validation */}
                 <input type="hidden" required value={cashForm.profileId} />
               </div>

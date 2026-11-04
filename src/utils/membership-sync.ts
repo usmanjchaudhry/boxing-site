@@ -2,21 +2,26 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type Stripe from 'stripe'
 import { cashMembershipEnded } from '@/utils/membership-expiry'
 import { DEFAULT_TIMEZONE } from '@/utils/timezone'
-import { currentPeriod, localStatusFromStripe, type LocalStatus } from '@/utils/stripe-status'
+import { type LocalStatus } from '@/utils/stripe-status'
+import { isCardMembership, verifyCardMembership } from '@/utils/card-membership'
+import { fetchAll } from '@/utils/supabase-paging'
 
 /**
  * Nightly safety net that brings every membership in line with reality, even
  * if nobody scans in or opens a page:
  *
- *   - Cash: an Active cash membership whose end date has arrived (gym time) is
- *     set to Cancelled. The scanner already refuses it from 12:00 AM on the end
- *     date; this makes the dashboard, admin list and reports agree.
+ *   - Cash: an Active cash membership whose end date has arrived (gym time), or
+ *     that has no end date at all, is set to Cancelled. The scanner already
+ *     refuses it; this makes the dashboard, admin list and reports agree.
  *   - Card (Stripe): each membership is compared with its live Stripe
  *     subscription. If a webhook was missed (outage, bad secret, deploy), a
  *     failed payment still turns into Past_Due here, a paid one back into
- *     Active, and a cancelled/deleted one into Cancelled.
+ *     Active, and a cancelled/deleted one into Cancelled. A card membership with
+ *     no Stripe subscription on record is looked up by Stripe customer, and
+ *     cancelled if nothing is paying for it. Unknown payment methods are
+ *     treated as card: they must be backed by Stripe.
  *
- * Comp memberships are left alone.
+ * Comp (free) memberships are left alone.
  */
 
 export interface SyncChange {
@@ -43,22 +48,33 @@ type Row = {
 
 const SYNCED_STATUSES = ['Active', 'Past_Due', 'Frozen']
 
-function isMissingInStripe(err: unknown): boolean {
-  const e = err as { statusCode?: number; code?: string }
-  return e?.statusCode === 404 || e?.code === 'resource_missing'
-}
-
 export async function syncMemberships(db: SupabaseClient, stripe: Stripe, now: Date = new Date()): Promise<SyncResult> {
   const result: SyncResult = { checked: 0, updated: 0, errors: 0, changes: [] }
 
   const { data: facility } = await db.from('facilities').select('timezone').limit(1).maybeSingle()
   const timeZone = facility?.timezone || DEFAULT_TIMEZONE
 
-  const { data: rows, error } = await db
-    .from('subscriptions')
-    .select('household_id, status, payment_method, end_date, stripe_subscription_id')
-    .in('status', SYNCED_STATUSES)
-  if (error) throw new Error(`Could not load memberships: ${error.message}`)
+  let rows: Row[]
+  let households: { id: string; stripe_customer_id: string | null }[]
+  try {
+    ;[rows, households] = await Promise.all([
+      fetchAll<Row>((from, to) => db
+        .from('subscriptions')
+        .select('household_id, status, payment_method, end_date, stripe_subscription_id')
+        .in('status', SYNCED_STATUSES)
+        .order('household_id')
+        .range(from, to)),
+      fetchAll<{ id: string; stripe_customer_id: string | null }>((from, to) => db
+        .from('households')
+        .select('id, stripe_customer_id')
+        .not('stripe_customer_id', 'is', null)
+        .order('id')
+        .range(from, to)),
+    ])
+  } catch (e) {
+    throw new Error(`Could not load memberships: ${(e as Error).message}`)
+  }
+  const customerByHousehold = new Map(households.map(h => [h.id, h.stripe_customer_id]))
 
   const apply = async (row: Row, values: Record<string, unknown>, to: LocalStatus, reason: string) => {
     // Only change the row if it still looks the way we read it (another update may have just landed)
@@ -78,37 +94,23 @@ export async function syncMemberships(db: SupabaseClient, stripe: Stripe, now: D
     }
   }
 
-  for (const row of (rows ?? []) as Row[]) {
+  for (const row of rows) {
     result.checked++
-    const method = (row.payment_method ?? '').toLowerCase()
+    const method = (row.payment_method ?? '').trim().toLowerCase()
 
     try {
       if (method === 'cash') {
         if (cashMembershipEnded(row, now, timeZone)) {
-          await apply(row, { status: 'Cancelled' }, 'Cancelled', `cash membership ended ${row.end_date?.slice(0, 10)}`)
+          await apply(row, { status: 'Cancelled' }, 'Cancelled', row.end_date ? `cash membership ended ${row.end_date.slice(0, 10)}` : 'cash membership has no end date')
         }
         continue
       }
-      if (method === 'comp' || !row.stripe_subscription_id) continue
+      if (!isCardMembership(row)) continue // comp
 
-      let to: LocalStatus
-      let values: Record<string, unknown>
-      let reason: string
-      try {
-        const sub = await stripe.subscriptions.retrieve(row.stripe_subscription_id)
-        to = localStatusFromStripe(sub)
-        const { start, end } = currentPeriod(sub)
-        values = { status: to, ...(start ? { start_date: start } : {}), ...(end ? { end_date: end } : {}) }
-        reason = `Stripe status ${sub.status}`
-      } catch (err) {
-        if (!isMissingInStripe(err)) throw err
-        to = 'Cancelled'
-        values = { status: 'Cancelled' }
-        reason = 'Stripe subscription no longer exists'
-      }
-
-      const endChanged = 'end_date' in values && values.end_date !== row.end_date?.slice(0, 10)
-      if (row.status !== to || endChanged) await apply(row, values, to, reason)
+      const v = await verifyCardMembership(stripe, row, customerByHousehold.get(row.household_id) ?? null)
+      const endChanged = 'end_date' in v.update && v.update.end_date !== row.end_date?.slice(0, 10)
+      const idChanged = 'stripe_subscription_id' in v.update
+      if (row.status !== v.status || endChanged || idChanged) await apply(row, v.update, v.status, v.reason)
     } catch (err) {
       result.errors++
       console.error('[membership-sync] Could not check', row.household_id, (err as Error).message)

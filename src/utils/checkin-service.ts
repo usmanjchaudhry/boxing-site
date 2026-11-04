@@ -5,6 +5,7 @@ import { effectiveDailyLimit } from '@/utils/plan-rules'
 import { cashMembershipEnded, formatEndDate } from '@/utils/membership-expiry'
 import { paymentTypeOf, type MembershipSummary } from '@/utils/membership-billing'
 import { getWaiverStatuses, waiverDenialMessage } from '@/utils/waivers'
+import { cardNeedsVerification, verifyCardMembership, saveCardVerification, type CardVerification } from '@/utils/card-membership'
 
 /**
  * Check-in domain service.
@@ -88,7 +89,7 @@ type PlanRow = {
   max_daily_checkins: number | null
 }
 
-const SUBSCRIPTION_COLUMNS = 'id, status, plan_id, end_date, payment_method'
+const SUBSCRIPTION_COLUMNS = 'id, status, plan_id, end_date, payment_method, stripe_subscription_id'
 const PLAN_COLUMNS = 'name, price_cents, billing_interval, max_dependents, max_daily_checkins'
 
 /** The household's subscription with its plan. */
@@ -107,6 +108,7 @@ type SubscriptionRow = {
   status: string | null
   end_date: string | null
   payment_method: string | null
+  stripe_subscription_id: string | null
 }
 
 /**
@@ -215,6 +217,35 @@ async function evaluateMembership(
       return deny(NO_ACCESS)
   }
 
+  // Card memberships: if what we have looks stale (a missed webhook), confirm with
+  // Stripe before letting them in. Anything not clearly paid is refused.
+  if (cardNeedsVerification(subscription, localDateString(new Date(), timeZone))) {
+    let verified: CardVerification
+    try {
+      const { data: household } = await db.from('households').select('stripe_customer_id').eq('id', hm.household_id).maybeSingle()
+      const { stripe } = await import('@/utils/stripe/server')
+      verified = await verifyCardMembership(stripe, subscription, household?.stripe_customer_id ?? null)
+      await saveCardVerification(db, hm.household_id, verified)
+    } catch (e) {
+      console.error('[checkin] Could not verify card membership with Stripe:', e)
+      return deny({
+        displayFlag: 'Payment Unverified',
+        loggedFlag: 'Payment Due',
+        message: "Couldn't confirm their card payment with Stripe. Try again in a minute, or check their payments in Stripe.",
+      })
+    }
+    if (membership) membership = { ...membership, status: verified.status }
+    if (verified.status === 'Past_Due') {
+      return deny({ displayFlag: 'Payment Due', loggedFlag: 'Payment Due', message: 'Their card payment did not go through. Ask the member to update their card.' })
+    }
+    if (verified.status === 'Frozen') {
+      return deny({ ...NO_ACCESS, displayFlag: 'Membership Frozen', message: `${plan?.name ?? 'This membership'} is frozen. Unfreeze it in Admin to allow entry.` })
+    }
+    if (verified.status !== 'Active') {
+      return deny({ ...NO_ACCESS, displayFlag: 'Membership Cancelled', message: `${plan?.name ?? 'This membership'} is no longer active in Stripe.` })
+    }
+  }
+
   // Cash memberships end on their own at the start of their end date (gym time)
   if (cashMembershipEnded(subscription, new Date(), timeZone)) {
     await db
@@ -226,10 +257,11 @@ async function evaluateMembership(
     return deny({
       displayFlag: 'Membership Expired',
       loggedFlag: 'Payment Due',
-      message: `Cash membership ended on ${formatEndDate(subscription.end_date as string)}. Please renew.`,
+      message: subscription.end_date
+        ? `Cash membership ended on ${formatEndDate(subscription.end_date)}. Please renew.`
+        : 'This cash membership has no end date. Record the cash payment again to set one.',
     })
   }
-
   // Individual plans cover the primary account holder only
   if (plan && plan.max_dependents === 0 && hm.role !== 'Primary') {
     return deny({ ...NO_ACCESS, message: `${plan.name} only covers the primary account holder.` })
@@ -301,7 +333,7 @@ export async function processCheckin(
   // 1. Profile
   const { data: profile } = await db
     .from('profiles')
-    .select('id, first_name, last_name, date_of_birth')
+    .select('id, first_name, last_name, date_of_birth, deleted_at')
     .eq('id', profileId)
     .maybeSingle()
 
@@ -312,6 +344,15 @@ export async function processCheckin(
     }
   }
 
+  // Archived members can't check in (an admin can restore them on the Members tab)
+  if (profile.deleted_at) {
+    await log('No Active Pass')
+    const member = { id: profile.id, first_name: profile.first_name, last_name: profile.last_name, date_of_birth: profile.date_of_birth }
+    return {
+      httpStatus: 200,
+      body: { status: 'denied', flag: 'Account Archived', message: 'This account was archived by the gym. An admin can restore it on the Members tab.', member },
+    }
+  }
   // 2. Access: day pass first, then membership
   const timeZone = facility?.timezone || DEFAULT_TIMEZONE
   const startOfToday = startOfTodayIn(timeZone)
