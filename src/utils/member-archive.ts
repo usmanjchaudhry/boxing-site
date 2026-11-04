@@ -272,7 +272,7 @@ export async function permanentlyDeleteMember(db: SupabaseClient, stripe: Stripe
     const r = await db.from('household_members').delete().in('profile_id', ids)
     if (r.error) fail('household', r.error.message)
   }
-  for (const [table, column] of [['relationships', 'guardian_id'], ['relationships', 'minor_id'], ['waiver_requests', 'participant_id'], ['waivers', 'participant_id'], ['waivers', 'signed_by_id'], ['addresses', 'profile_id']] as const) {
+  for (const [table, column] of [['relationships', 'guardian_id'], ['relationships', 'minor_id'], ['waiver_sign_requests', 'participant_id'], ['waivers', 'participant_id'], ['waivers', 'signed_by_id'], ['addresses', 'profile_id']] as const) {
     const r = await db.from(table).delete().in(column, ids)
     if (r.error && !/does not exist|schema cache/i.test(r.error.message)) fail(table, r.error.message)
   }
