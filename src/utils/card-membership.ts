@@ -96,6 +96,8 @@ export async function verifyCardMembership(
   if (sub.id !== row.stripe_subscription_id) {
     update.stripe_subscription_id = sub.id
     update.payment_method = 'stripe'
+    // Checkout stores the plan on the subscription; keep the plan name in step
+    if (typeof sub.metadata?.plan_id === 'string' && sub.metadata.plan_id) update.plan_id = sub.metadata.plan_id
   }
   return { status, update, reason: `Stripe status ${sub.status}` }
 }
