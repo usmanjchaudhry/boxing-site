@@ -74,19 +74,22 @@ export function describeAccess(
   return { kind: 'membership', label: 'Membership', detail: planName }
 }
 
-/** Profile ids whose name matches every word of `q` (case-insensitive). */
-async function searchProfileIds(db: SupabaseClient, q: string): Promise<string[]> {
-  // Only letters, digits, spaces, apostrophes and hyphens: keeps the PostgREST filter safe
-  const words = q.toLowerCase().replace(/[^\p{L}\p{N}' -]/gu, ' ').split(/\s+/).filter(Boolean).slice(0, 4)
-  if (words.length === 0) return []
-  const or = words.flatMap(w => [`first_name.ilike.*${w}*`, `last_name.ilike.*${w}*`]).join(',')
-  const { data } = await db.from('profiles').select('id, first_name, last_name').or(or).limit(500)
-  return (data ?? [])
-    .filter(p => {
-      const full = `${p.first_name ?? ''} ${p.last_name ?? ''}`.toLowerCase()
-      return words.every(w => full.includes(w))
-    })
-    .map(p => p.id)
+/**
+ * Words of a name search, cleaned for a PostgREST filter: only letters, digits,
+ * apostrophes and hyphens survive, so the query can't break out of the filter.
+ */
+function searchWords(q: string): string[] {
+  return q.toLowerCase().replace(/[^\p{L}\p{N}' -]/gu, ' ').split(/\s+/).filter(Boolean).slice(0, 4)
+}
+
+/**
+ * Filter on the joined `profiles` row: every word must be in the first or last name.
+ * This runs inside the check-in query itself. It used to look up matching profile
+ * ids first (capped at 500, checked before every word was applied) and pass them
+ * back as a list, which could leave members out once the gym got big.
+ */
+function nameFilter(words: string[]): string {
+  return `and(${words.map(w => `or(first_name.ilike.*${w}*,last_name.ilike.*${w}*)`).join(',')})`
 }
 
 /** Current plan name per profile (via household subscription). */
@@ -132,21 +135,23 @@ export async function listCheckins(
   const startIso = zonedMidnightUtc(filters.from, timeZone).toISOString()
   const endIso = zonedMidnightUtc(addDays(filters.to, 1), timeZone).toISOString()
 
-  let profileIds: string[] | null = null
+  let words: string[] | null = null
   if (filters.q.trim()) {
-    profileIds = await searchProfileIds(db, filters.q)
-    if (profileIds.length === 0) return empty
+    words = searchWords(filters.q)
+    if (words.length === 0) return empty
   }
+  // When searching, inner-join profiles so only check-ins by matching members count
+  const profileJoin = words ? 'profiles!inner' : 'profiles'
 
   // Scope shared by every query: date range (+ name search)
   type Q = ReturnType<ReturnType<SupabaseClient['from']>['select']>
   const scoped = (q: Q): Q => {
     let s = q.gte('scanned_at', startIso).lt('scanned_at', endIso)
-    if (profileIds) s = s.in('profile_id', profileIds)
+    if (words) s = s.or(nameFilter(words), { referencedTable: 'profiles' })
     return s
   }
   const count = (apply: (q: Q) => Q = q => q) =>
-    apply(scoped(db.from('gym_checkins').select('id', { count: 'exact', head: true })))
+    apply(scoped(db.from('gym_checkins').select(words ? 'id, profiles!inner(id)' : 'id', { count: 'exact', head: true })))
   const withResult = (q: Q, r: ResultFilter): Q =>
     r === 'allowed' ? q.eq('status_flag', 'Success') : r === 'denied' ? q.neq('status_flag', 'Success') : q
   const withAccess = (q: Q, a: AccessFilter): Q =>
@@ -157,7 +162,7 @@ export async function listCheckins(
   const pageQuery = withAccess(
     withResult(
       scoped(db.from('gym_checkins').select(
-        'id, scanned_at, checkin_method, status_flag, pass_id, profile_id, profiles(id, first_name, last_name), passes(pass_type)',
+        `id, scanned_at, checkin_method, status_flag, pass_id, profile_id, ${profileJoin}(id, first_name, last_name), passes(pass_type)`,
         { count: 'exact' }
       )),
       filters.result

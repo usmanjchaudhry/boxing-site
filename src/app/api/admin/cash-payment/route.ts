@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/utils/supabase/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
+import { fetchAll, chunk } from '@/utils/supabase-paging'
+import { fullName } from '@/utils/name-search'
 
 function getAdminSupabase() {
   return createAdminClient(
@@ -179,7 +181,7 @@ export async function POST(request: NextRequest) {
 }
 
 // GET /api/admin/cash-payment — Get all cash payment history
-export async function GET(request: NextRequest) {
+export async function GET() {
   const admin = await verifyAdmin()
   if (!admin) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
@@ -187,72 +189,87 @@ export async function GET(request: NextRequest) {
 
   const db = getAdminSupabase()
 
-  // Simple flat query
-  const { data: rawPayments, error } = await db
-    .from('cash_payments')
-    .select('id, amount_cents, payment_date, notes, created_at, household_id, subscription_id, recorded_by')
-    .order('created_at', { ascending: false })
-    .limit(50)
+  // Every cash payment (this used to stop at the newest 50, so older ones vanished).
+  // Lookups below are batched by id so long lists don't make request URLs too long,
+  // and paged because Supabase caps each response at 1000 rows.
+  type RawPayment = { id: string; amount_cents: number; payment_date: string; notes: string | null; created_at: string; household_id: string; subscription_id: string; recorded_by: string }
+  type SubRow = { id: string; status: string; end_date: string | null; membership_plans: unknown }
+  type HouseholdMemberRow = { household_id: string; role: string; profiles: unknown }
+  type ProfileRow = { id: string; first_name: string | null; last_name: string | null }
+  const inBatches = async <T,>(ids: string[], load: (batch: string[], from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>) =>
+    (await Promise.all(chunk(ids, 150).map(batch => fetchAll<T>((from, to) => load(batch, from, to))))).flat()
 
-  if (error) {
-    console.error('Failed to fetch cash payments:', error)
-    return NextResponse.json({ payments: [] })
+  let rawPayments: RawPayment[], subs: SubRow[], subPayments: { subscription_id: string }[], hhMembers: HouseholdMemberRow[], admins: ProfileRow[]
+  try {
+    rawPayments = await fetchAll<RawPayment>((from, to) => db
+      .from('cash_payments')
+      .select('id, amount_cents, payment_date, notes, created_at, household_id, subscription_id, recorded_by')
+      .order('created_at', { ascending: false })
+      .order('id')
+      .range(from, to))
+
+    const subIds = [...new Set(rawPayments.map(p => p.subscription_id).filter(Boolean))]
+    const hhIds = [...new Set(rawPayments.map(p => p.household_id).filter(Boolean))]
+    const adminIds = [...new Set(rawPayments.map(p => p.recorded_by).filter(Boolean))]
+
+    ;[subs, subPayments, hhMembers, admins] = await Promise.all([
+      // Subscription details for end_date and plan
+      inBatches<SubRow>(subIds, (batch, from, to) => db
+        .from('subscriptions')
+        .select('id, status, end_date, plan_id, membership_plans(name)')
+        .in('id', batch).order('id').range(from, to)),
+      // How many cash payments each subscription has in total, so the UI can warn
+      // when removing the only payment behind a membership.
+      inBatches<{ subscription_id: string }>(subIds, (batch, from, to) => db
+        .from('cash_payments')
+        .select('subscription_id')
+        .in('subscription_id', batch).order('id').range(from, to)),
+      // Everyone in each household: the primary's name is shown, and every
+      // member's name is searchable (so a dependent's name finds the payment)
+      inBatches<HouseholdMemberRow>(hhIds, (batch, from, to) => db
+        .from('household_members')
+        .select('household_id, profile_id, role, profiles(first_name, last_name)')
+        .in('household_id', batch).order('household_id').order('profile_id').range(from, to)),
+      // Admin names who recorded payments
+      inBatches<ProfileRow>(adminIds, (batch, from, to) => db
+        .from('profiles')
+        .select('id, first_name, last_name')
+        .in('id', batch).order('id').range(from, to)),
+    ])
+  } catch (e) {
+    console.error('Failed to fetch cash payments:', e)
+    return NextResponse.json({ payments: [], error: 'Could not load cash payments' })
   }
 
-  // Get subscription details for end_date and plan
-  const subIds = [...new Set((rawPayments || []).map(p => p.subscription_id))]
-  const { data: subs } = await db
-    .from('subscriptions')
-    .select('id, status, end_date, plan_id, membership_plans(name)')
-    .in('id', subIds.length ? subIds : ['none'])
-
-  const subMap: Record<string, any> = {}
-  for (const s of subs || []) {
-    subMap[s.id] = s
-  }
-
-  // How many cash payments each subscription has in total, so the UI can warn
-  // when removing the only payment behind a membership.
-  const { data: subPayments } = await db
-    .from('cash_payments')
-    .select('subscription_id')
-    .in('subscription_id', subIds.length ? subIds : ['none'])
+  const subMap: Record<string, SubRow> = {}
+  for (const s of subs) subMap[s.id] = s
 
   const subPaymentCount: Record<string, number> = {}
-  for (const sp of subPayments || []) {
+  for (const sp of subPayments) {
     subPaymentCount[sp.subscription_id] = (subPaymentCount[sp.subscription_id] || 0) + 1
   }
 
-  // Get primary member names per household
-  const hhIds = [...new Set((rawPayments || []).map(p => p.household_id))]
-  const { data: hhMembers } = await db
-    .from('household_members')
-    .select('household_id, role, profiles(first_name, last_name)')
-    .eq('role', 'Primary')
-    .in('household_id', hhIds.length ? hhIds : ['none'])
-
+  const one = <T,>(v: unknown) => (Array.isArray(v) ? v[0] : v) as T | null
   const hhNameMap: Record<string, string> = {}
-  for (const hm of hhMembers || []) {
-    const p = hm.profiles as any
-    if (p) hhNameMap[hm.household_id] = `${p.first_name} ${p.last_name}`
+  const hhAllNames: Record<string, string[]> = {}
+  for (const hm of hhMembers) {
+    const p = one<{ first_name: string | null; last_name: string | null }>(hm.profiles)
+    if (!p) continue
+    const name = fullName(p.first_name, p.last_name)
+    if (!name) continue
+    if (hm.role === 'Primary') hhNameMap[hm.household_id] = name
+    ;(hhAllNames[hm.household_id] ||= []).push(name)
   }
 
-  // Get admin names who recorded payments
-  const adminIds = [...new Set((rawPayments || []).map(p => p.recorded_by))]
-  const { data: admins } = await db
-    .from('profiles')
-    .select('id, first_name, last_name')
-    .in('id', adminIds.length ? adminIds : ['none'])
-
   const adminMap: Record<string, string> = {}
-  for (const a of admins || []) {
-    adminMap[a.id] = `${a.first_name} ${a.last_name}`
+  for (const a of admins) {
+    adminMap[a.id] = fullName(a.first_name, a.last_name)
   }
 
   // Build response
-  const payments = (rawPayments || []).map(p => {
+  const payments = rawPayments.map(p => {
     const sub = subMap[p.subscription_id]
-    const plan = sub?.membership_plans as any
+    const plan = one<{ name?: string }>(sub?.membership_plans)
     return {
       id: p.id,
       householdId: p.household_id,
@@ -261,6 +278,7 @@ export async function GET(request: NextRequest) {
       notes: p.notes,
       created_at: p.created_at,
       memberName: hhNameMap[p.household_id] || 'Unknown',
+      householdNames: hhAllNames[p.household_id] || [],
       planName: plan?.name || 'Unknown',
       endDate: sub?.end_date || null,
       subStatus: sub?.status || 'Unknown',

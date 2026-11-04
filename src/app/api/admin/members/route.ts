@@ -4,6 +4,7 @@ import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { cashMembershipEnded } from '@/utils/membership-expiry'
 import { getWaiverStatuses, type WaiverStatus } from '@/utils/waivers'
 import { fetchAll } from '@/utils/supabase-paging'
+import { fullName } from '@/utils/name-search'
 
 function getAdminSupabase() {
   return createAdminClient(
@@ -133,7 +134,7 @@ export async function GET(request: NextRequest) {
     if (hm.role === 'Primary') {
       const primary = profileById.get(hm.profile_id)
       if (primary) {
-        householdPrimaryMap[hm.household_id] = `${primary.first_name} ${primary.last_name}`
+        householdPrimaryMap[hm.household_id] = fullName(primary.first_name, primary.last_name)
       }
     }
   }
@@ -158,7 +159,7 @@ export async function GET(request: NextRequest) {
     return {
       id: p.id,
       householdId,
-      name: `${p.first_name} ${p.last_name}`,
+      name: fullName(p.first_name, p.last_name) || 'Unnamed member',
       role: p.role,
       householdRole: hm?.role || 'N/A',
       subscriptionStatus,

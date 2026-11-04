@@ -10,6 +10,7 @@ import { extractProfileId, type CheckinMethod, type CheckinResult } from '@/util
 import { feedbackSounds, unlockAudio, isAudioUnlocked } from '@/utils/feedback-sounds'
 import { classify, type CheckinTone } from '@/utils/checkin-feedback'
 import { billingDetails, type MembershipSummary } from '@/utils/membership-billing'
+import { matchesSearch } from '@/utils/name-search'
 
 /* ────────────────────────────────────────────────────────────
  * Config
@@ -17,6 +18,8 @@ import { billingDetails, type MembershipSummary } from '@/utils/membership-billi
 const AUTO_RESET_MS: Record<CheckinTone, number> = { success: 4000, warning: 9000, error: 9000 }
 const SAME_CODE_COOLDOWN_MS = 3000 // scanners can read the same screen twice in a row
 const RECENT_LIMIT = 8
+const MAX_MANUAL_MATCHES = 8
+const MEMBERS_STALE_MS = 60_000 // refetch the manual-search member list after a minute
 
 type Tone = CheckinTone
 
@@ -383,9 +386,11 @@ function ManualCheckin({ onCheckin, disabled }: { onCheckin: (id: string, method
   const [members, setMembers] = useState<MemberOption[] | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const loadedAt = useRef(0)
 
+  // Reload when stale so people who signed up after the page opened are findable too
   const load = useCallback(async () => {
-    if (members || loading) return
+    if (loading || (members && Date.now() - loadedAt.current < MEMBERS_STALE_MS)) return
     setLoading(true)
     setError(null)
     try {
@@ -393,6 +398,7 @@ function ManualCheckin({ onCheckin, disabled }: { onCheckin: (id: string, method
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to load members')
       setMembers(data.members || [])
+      loadedAt.current = Date.now()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load members')
     } finally {
@@ -400,11 +406,12 @@ function ManualCheckin({ onCheckin, disabled }: { onCheckin: (id: string, method
     }
   }, [members, loading])
 
-  const matches = useMemo(() => {
-    const q = query.trim().toLowerCase()
+  const allMatches = useMemo(() => {
+    const q = query.trim()
     if (!members || q.length < 2 || extractProfileId(q)) return []
-    return members.filter(m => m.name.toLowerCase().includes(q)).slice(0, 6)
+    return members.filter(m => matchesSearch(q, m.name))
   }, [members, query])
+  const matches = allMatches.slice(0, MAX_MANUAL_MATCHES)
 
   const submit = (id: string, method: CheckinMethod) => {
     onCheckin(id, method)
@@ -463,6 +470,11 @@ function ManualCheckin({ onCheckin, disabled }: { onCheckin: (id: string, method
             </span>
           </button>
         ))}
+        {allMatches.length > matches.length && (
+          <p className="px-1 py-1 text-[11px] text-zinc-500">
+            +{allMatches.length - matches.length} more. Keep typing to narrow it down.
+          </p>
+        )}
         {members && query.trim().length >= 2 && !extractProfileId(query) && matches.length === 0 && (
           <p className="px-1 py-2 text-xs text-zinc-600">No members match &ldquo;{query}&rdquo;.</p>
         )}

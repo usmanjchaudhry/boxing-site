@@ -9,6 +9,7 @@ import UserGuideTab from '@/components/user-guide/UserGuideTab'
 import type { GuideFacts } from '@/utils/user-guide-facts'
 import { tabsForRole, type AdminTab, type StaffRole } from './admin-tabs'
 import { freezeSubscription, unfreezeSubscription, cancelSubscription } from './actions'
+import { matchesSearch } from '@/utils/name-search'
 
 interface Stats {
   totalMembers: number
@@ -34,6 +35,10 @@ interface Payment {
   customerName: string
   description: string
   receiptUrl: string | null
+  /** Primary member of the household behind this Stripe customer */
+  memberName: string | null
+  /** Everyone in that household (searchable) */
+  householdNames: string[]
 }
 
 interface Member {
@@ -84,6 +89,9 @@ export default function AdminDashboardClient({ role, guideFacts }: { role: strin
   const [stats, setStats] = useState<Stats | null>(null)
   const [checkins, setCheckins] = useState<CheckinEntry[]>([])
   const [payments, setPayments] = useState<Payment[]>([])
+  const [paymentsSearch, setPaymentsSearch] = useState('')
+  // Stripe payments matching the search (by billing name/email or any household member's name)
+  const visiblePayments = payments.filter(p => matchesSearch(paymentsSearch, p.customerName, p.customerEmail, p.memberName, ...(p.householdNames ?? [])))
   const [members, setMembers] = useState<Member[]>([])
   const [loading, setLoading] = useState(true)
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
@@ -402,8 +410,28 @@ export default function AdminDashboardClient({ role, guideFacts }: { role: strin
       {activeTab === 'payments' && (
         <div className="rounded-2xl bg-zinc-950 border border-white/5 overflow-hidden">
           <div className="p-4 sm:p-6 border-b border-white/5">
-            <h3 className="text-lg font-bold">Recent Payments (from Stripe)</h3>
-            <p className="text-xs text-zinc-500 mt-1">Data pulled directly from Stripe API · Auto-refreshes every 15s</p>
+            <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-bold">Payments (from Stripe)</h3>
+                <p className="text-xs text-zinc-500 mt-1">
+                  Every card payment, newest first · {paymentsSearch.trim()
+                    ? `${visiblePayments.length} of ${payments.length} match`
+                    : `${payments.length} payments`} · Refreshes about every minute
+                </p>
+              </div>
+              <div className="relative w-full sm:w-64">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 pointer-events-none" />
+                <input
+                  id="payments-search"
+                  type="search"
+                  placeholder="Search name or email..."
+                  aria-label="Search payments by member name or email"
+                  value={paymentsSearch}
+                  onChange={(e) => setPaymentsSearch(e.target.value)}
+                  className="w-full bg-black/50 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none placeholder:text-zinc-600"
+                />
+              </div>
+            </div>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -426,12 +454,18 @@ export default function AdminDashboardClient({ role, guideFacts }: { role: strin
                   </td></tr>
                 ) : payments.length === 0 ? (
                   <tr><td colSpan={5} className="px-6 py-8 text-center text-zinc-600">No payments found</td></tr>
+                ) : visiblePayments.length === 0 ? (
+                  <tr><td colSpan={5} className="px-6 py-8 text-center text-zinc-600">No payments match &ldquo;{paymentsSearch}&rdquo;</td></tr>
                 ) : (
-                  payments.map(p => (
+                  visiblePayments
+                    .map(p => (
                     <tr key={p.id} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
                       <td className="px-4 sm:px-6 py-3">
                         <p className="font-medium">{p.customerName}</p>
                         <p className="text-xs text-zinc-500">{p.customerEmail}</p>
+                        {p.memberName && p.memberName !== p.customerName && (
+                          <p className="text-xs text-zinc-600">Member: <span className="text-zinc-400">{p.memberName}</span></p>
+                        )}
                       </td>
                       <td className="px-4 sm:px-6 py-3 font-bold text-green-400">
                         ${(p.amount / 100).toFixed(2)}
@@ -505,7 +539,7 @@ export default function AdminDashboardClient({ role, guideFacts }: { role: strin
                     </div>
                   </td></tr>
                 ) : members
-                  .filter(m => m.name.toLowerCase().includes(membersTabSearch.toLowerCase()))
+                  .filter(m => matchesSearch(membersTabSearch, m.name))
                   .map(m => (
                   <tr key={m.id} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
                     <td className="px-4 sm:px-6 py-3">
@@ -687,35 +721,59 @@ export default function AdminDashboardClient({ role, guideFacts }: { role: strin
                 </div>
                 {showMemberDropdown && (
                   <div className="absolute z-50 w-full mt-1 bg-zinc-900 border border-white/10 rounded-xl shadow-2xl max-h-48 overflow-y-auto">
-                    {members
-                      .filter(m => m.householdRole === 'Primary')
-                      .filter(m => m.name.toLowerCase().includes(memberSearch.toLowerCase()))
-                      .map(m => (
+                    {(() => {
+                      // Everyone is searchable here. Cash pays for the whole household,
+                      // so picking a dependent activates their primary's membership.
+                      const matches = members.filter(m => matchesSearch(memberSearch, m.name))
+                      if (matches.length === 0) return <p className="px-4 py-3 text-xs text-zinc-600">No members found</p>
+                      return matches.map(m => {
+                        const noHousehold = !m.householdId
+                        return (
                         <button
                           key={m.id}
                           type="button"
+                          disabled={noHousehold}
+                          title={noHousehold ? 'This member has no household yet, so a cash payment cannot be recorded for them' : undefined}
                           onClick={() => {
                             setCashForm(f => ({ ...f, profileId: m.id }))
                             setMemberSearch(m.name)
                             setShowMemberDropdown(false)
                           }}
-                          className={`w-full text-left px-4 py-2.5 text-sm hover:bg-white/5 transition-colors flex justify-between items-center ${
+                          className={`w-full text-left px-4 py-2.5 text-sm hover:bg-white/5 transition-colors flex justify-between items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed ${
                             cashForm.profileId === m.id ? 'bg-red-500/10 text-red-400' : 'text-zinc-300'
                           }`}
                         >
-                          <span>{m.name}</span>
-                          <span className={`text-xs px-1.5 py-0.5 rounded ${
+                          <span className="min-w-0">
+                            <span className="block truncate">{m.name}</span>
+                            {noHousehold ? (
+                              <span className="block text-[11px] text-zinc-500">No household</span>
+                            ) : m.householdRole !== 'Primary' && (
+                              <span className="block text-[11px] text-zinc-500 truncate">
+                                {m.householdRole}{m.primaryName ? ` of ${m.primaryName}` : ''}
+                              </span>
+                            )}
+                          </span>
+                          <span className={`shrink-0 text-xs px-1.5 py-0.5 rounded ${
                             m.subscriptionStatus === 'Active' ? 'text-green-400 bg-green-500/10'
                             : m.subscriptionStatus === 'None' ? 'text-zinc-500 bg-zinc-500/10'
                             : 'text-amber-400 bg-amber-500/10'
                           }`}>{m.subscriptionStatus}</span>
                         </button>
-                      ))}
-                    {members.filter(m => m.householdRole === 'Primary').filter(m => m.name.toLowerCase().includes(memberSearch.toLowerCase())).length === 0 && (
-                      <p className="px-4 py-3 text-xs text-zinc-600">No members found</p>
-                    )}
+                        )
+                      })
+                    })()}
                   </div>
                 )}
+                {(() => {
+                  const picked = members.find(m => m.id === cashForm.profileId)
+                  if (!picked || picked.householdRole === 'Primary') return null
+                  return (
+                    <p className="text-[11px] text-amber-400/90 mt-1">
+                      {picked.name} is on {picked.primaryName ? `${picked.primaryName}'s` : 'another member\u2019s'} household.
+                      This payment activates that household&apos;s membership. Pick a family plan to cover them.
+                    </p>
+                  )
+                })()}
                 {/* Hidden required input for form validation */}
                 <input type="hidden" required value={cashForm.profileId} />
               </div>
